@@ -57,6 +57,7 @@ export interface SunuGestionContextType {
   }) => void;
 
   addProperty: (property: Omit<Property, 'id' | 'createdAt'>) => void;
+  updateProperty: (propertyId: string, updates: Partial<Property>) => void;
   deleteProperty: (propertyId: string) => void;
   addUnit: (unit: Omit<Unit, 'id'>) => void;
   deleteUnit: (unitId: string) => void;
@@ -1445,6 +1446,30 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  const updateProperty = (propertyId: string, updates: Partial<Property>) => {
+    setProperties((prev) =>
+      prev.map((p) => (p.id === propertyId ? { ...p, ...updates } : p))
+    );
+    if (updates.ownerId || updates.ownerName) {
+      setUnits((prev) =>
+        prev.map((u) =>
+          u.propertyId === propertyId
+            ? {
+                ...u,
+                ...(updates.ownerId ? { ownerId: updates.ownerId } : {}),
+                ...(updates.ownerName ? { ownerName: updates.ownerName } : {}),
+              }
+            : u
+        )
+      );
+    }
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.updateProperty(propertyId, updates).catch((err) =>
+        console.warn('Supabase updateProperty error:', err)
+      );
+    }
+  };
+
   const addUnit = (unitData: Omit<Unit, 'id'>) => {
     const newId = generateUUID();
     const newUnit: Unit = {
@@ -2026,6 +2051,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         recordPayment,
         deletePayment,
         addProperty,
+        updateProperty,
         deleteProperty,
         addUnit,
         deleteUnit,

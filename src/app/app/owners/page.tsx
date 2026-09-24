@@ -19,7 +19,18 @@ import {
 } from 'lucide-react';
 
 export default function OwnersPage() {
-  const { owners, properties, addOwner, deleteOwner, setSelectedDocumentForPrint } = useSunuGestion();
+  const {
+    owners,
+    properties,
+    units,
+    leases,
+    expenses,
+    addOwner,
+    deleteOwner,
+    updateProperty,
+    setSelectedDocumentForPrint
+  } = useSunuGestion();
+
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [ownerToDelete, setOwnerToDelete] = useState<typeof owners[0] | null>(null);
@@ -35,7 +46,7 @@ export default function OwnersPage() {
   const [address, setAddress] = useState('Dakar');
   const [bankAccount, setBankAccount] = useState('');
   const [commissionRate, setCommissionRate] = useState(8);
-  const [estimatedRevenue, setEstimatedRevenue] = useState(1500000);
+  const [selectedPropertyId, setSelectedPropertyId] = useState('');
 
   const filteredOwners = owners.filter((o) => {
     const fullName = `${o.firstName || ''} ${o.lastName || ''}`.toLowerCase();
@@ -52,7 +63,7 @@ export default function OwnersPage() {
 
     setIsSubmitting(true);
     try {
-      await addOwner({
+      const createdOwner = await addOwner({
         agencyId: 'org-1',
         firstName: newFirstName,
         lastName: newLastName,
@@ -63,9 +74,17 @@ export default function OwnersPage() {
         identityDocNumber: '1 890 1978 00412',
         bankAccount: bankAccount.trim() || 'CBAO SN012 01001 0039281001 45',
         commissionRatePercent: Number(commissionRate) || 8,
-        totalMonthlyRevenueFCFA: Number(estimatedRevenue) || 1500000,
-        propertiesCount: 1,
+        totalMonthlyRevenueFCFA: 0,
+        propertiesCount: selectedPropertyId ? 1 : 0,
       });
+
+      // Rapprochement automatique du bien sélectionné
+      if (selectedPropertyId && createdOwner && typeof createdOwner === 'object' && createdOwner.id) {
+        updateProperty(selectedPropertyId, {
+          ownerId: createdOwner.id,
+          ownerName: `${newFirstName} ${newLastName}`,
+        });
+      }
 
       setShowModal(false);
       setFirstName('');
@@ -73,7 +92,7 @@ export default function OwnersPage() {
       setPhone('+221 77 ');
       setEmail('');
       setBankAccount('');
-      setEstimatedRevenue(1500000);
+      setSelectedPropertyId('');
       setNotificationMsg(`Le propriétaire ${newFirstName} ${newLastName} a été enregistré avec succès.`);
       setTimeout(() => setNotificationMsg(null), 4000);
     } catch (err) {
@@ -92,7 +111,7 @@ export default function OwnersPage() {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Propriétaires Immobiliers</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Gestion des bailleurs, calcul automatique des commissions d'agence et versements nets (Payouts).
+            Gestion des bailleurs, calcul automatique des commissions d'agence et versements nets réels (Payouts).
           </p>
         </div>
 
@@ -142,10 +161,54 @@ export default function OwnersPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredOwners.map((o) => {
-            const grossRevenue = o.totalMonthlyRevenueFCFA || 2500000;
+            // 1. Biens réels du bailleur
+            const ownerProperties = properties.filter(
+              (p) =>
+                p.ownerId === o.id ||
+                (p.ownerName && `${o.firstName} ${o.lastName}`.trim().toLowerCase() === p.ownerName.trim().toLowerCase())
+            );
+            const ownerPropertyIds = new Set(ownerProperties.map((p) => p.id));
+
+            // 2. Unités réelles rattachées à ce bailleur
+            const ownerUnits = units.filter(
+              (u) =>
+                u.ownerId === o.id ||
+                ownerPropertyIds.has(u.propertyId) ||
+                (u.ownerName && `${o.firstName} ${o.lastName}`.trim().toLowerCase() === u.ownerName.trim().toLowerCase())
+            );
+            const ownerUnitIds = new Set(ownerUnits.map((u) => u.id));
+
+            // 3. Baux réels
+            const ownerLeases = leases.filter(
+              (l) =>
+                l.ownerId === o.id ||
+                ownerPropertyIds.has(l.propertyId) ||
+                ownerUnitIds.has(l.unitId) ||
+                (l.ownerName && `${o.firstName} ${o.lastName}`.trim().toLowerCase() === l.ownerName.trim().toLowerCase())
+            );
+
+            // 4. Revenus Bruts RÉELS (somme des loyers des baux actifs ou logements occupés)
+            const activeLeasesSum = ownerLeases
+              .filter((l) => l.status === 'ACTIF' || l.status === 'EXPIRANT_BIENTOT')
+              .reduce((sum, l) => sum + (l.rentAmountFCFA || 0), 0);
+
+            const occupiedUnitsSum = ownerUnits
+              .filter((u) => u.status === 'OCCUPE' || u.status === 'EN_RETARD')
+              .reduce((sum, u) => sum + (u.rentFCFA || 0), 0);
+
+            const grossRevenue = activeLeasesSum > 0 ? activeLeasesSum : occupiedUnitsSum;
+
+            // 5. Dépenses Immeubles RÉELLES enregistrées pour ce propriétaire
+            const ownerExpensesList = expenses.filter(
+              (e) => ownerPropertyIds.has(e.propertyId) || e.propertyId === o.id
+            );
+            const ownerExpenses = ownerExpensesList.reduce((sum, e) => sum + (e.amountFCFA || 0), 0);
+
+            // 6. Commission Agence RÉELLE (% appliqué sur les revenus réels perçus)
             const commPercent = o.commissionRatePercent ?? 8;
             const commissionAmount = Math.round(grossRevenue * (commPercent / 100));
-            const ownerExpenses = 350000;
+
+            // 7. Payout Net RÉEL (Revenu Net à reverser au propriétaire)
             const netPayout = Math.max(0, grossRevenue - ownerExpenses - commissionAmount);
             const initials = `${(o.firstName?.[0] || 'P').toUpperCase()}${(o.lastName?.[0] || '').toUpperCase()}`;
 
@@ -169,7 +232,7 @@ export default function OwnersPage() {
                       <button
                         type="button"
                         onClick={() => setOwnerToDelete(o)}
-                        className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Supprimer ce propriétaire"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -182,25 +245,59 @@ export default function OwnersPage() {
                       <Phone className="w-3.5 h-3.5 text-slate-400" /> {o.phone}
                     </p>
                     <p className="flex items-center gap-2">
-                      <CreditCard className="w-3.5 h-3.5 text-slate-400" /> {o.bankAccount}
+                      <CreditCard className="w-3.5 h-3.5 text-slate-400" /> {o.bankAccount || 'Non renseigné'}
                     </p>
                   </div>
 
-                  {/* Financial Calculation Statement */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs mt-4">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Revenus Bruts:</span>
+                  {/* Résumé des Biens & Logements réels */}
+                  <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100 text-[11px] text-slate-500 mt-3">
+                    <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    {ownerProperties.length > 0 ? (
+                      <span className="truncate">
+                        <strong className="text-slate-800 font-bold">{ownerProperties.length} bien{ownerProperties.length > 1 ? 's' : ''}</strong>
+                        {' : '}{ownerProperties.map((p) => p.name).join(', ')}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic">Aucun bien rattaché</span>
+                    )}
+                  </div>
+
+                  {/* Financial Calculation Statement (VRAIS MONTANTS CALCULÉS) */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs mt-3">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span className="flex items-center gap-1">
+                        <span>Revenus Bruts:</span>
+                        {ownerLeases.filter((l) => l.status === 'ACTIF').length > 0 && (
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            ({ownerLeases.filter((l) => l.status === 'ACTIF').length} bail)
+                          </span>
+                        )}
+                      </span>
                       <span className="font-bold text-slate-900">{grossRevenue.toLocaleString('fr-FR')} FCFA</span>
                     </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Dépenses Immeubles:</span>
-                      <span className="font-semibold text-rose-600">-{ownerExpenses.toLocaleString('fr-FR')} FCFA</span>
+
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span className="flex items-center gap-1">
+                        <span>Dépenses Immeubles:</span>
+                        {ownerExpensesList.length > 0 && (
+                          <span className="text-[10px] text-rose-400 font-normal">
+                            ({ownerExpensesList.length} facture{ownerExpensesList.length > 1 ? 's' : ''})
+                          </span>
+                        )}
+                      </span>
+                      <span className={`font-semibold ${ownerExpenses > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        {ownerExpenses > 0 ? `-${ownerExpenses.toLocaleString('fr-FR')} FCFA` : '0 FCFA'}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-slate-600">
+
+                    <div className="flex justify-between items-center text-slate-600">
                       <span>Commission Agence ({commPercent}%):</span>
-                      <span className="font-semibold text-amber-600">-{commissionAmount.toLocaleString('fr-FR')} FCFA</span>
+                      <span className={`font-semibold ${commissionAmount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                        {commissionAmount > 0 ? `-${commissionAmount.toLocaleString('fr-FR')} FCFA` : '0 FCFA'}
+                      </span>
                     </div>
-                    <div className="pt-2 border-t border-slate-200 flex justify-between font-black text-emerald-800 text-sm">
+
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center font-black text-emerald-800 text-sm">
                       <span>REVENU NET (PAYOUT):</span>
                       <span>{netPayout.toLocaleString('fr-FR')} FCFA</span>
                     </div>
@@ -302,14 +399,19 @@ export default function OwnersPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Revenus Mensuels Estimés (FCFA)</label>
-                  <input
-                    type="number"
-                    value={estimatedRevenue || ''}
-                    onChange={(e) => setEstimatedRevenue(Number(e.target.value))}
-                    placeholder="ex: 1500000"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block font-semibold text-slate-700 mb-1">Rattacher un Bien</label>
+                  <select
+                    value={selectedPropertyId}
+                    onChange={(e) => setSelectedPropertyId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-xs"
+                  >
+                    <option value="">Aucun bien pour l'instant</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.neighborhood || p.city})
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Commission Agence (%)</label>

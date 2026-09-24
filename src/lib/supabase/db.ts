@@ -115,8 +115,8 @@ export const SupabaseDbService = {
         identityDocNumber: row.cni_number || '',
         bankAccount: row.bank_rib || '',
         notes: row.notes || '',
-        propertiesCount: Array.isArray(row.properties) ? row.properties.length : 1,
-        totalMonthlyRevenueFCFA: 1800000,
+        propertiesCount: Array.isArray(row.properties) ? row.properties.length : 0,
+        totalMonthlyRevenueFCFA: 0,
         commissionRatePercent: Number(row.commission_rate) || 8,
         createdAt: row.created_at ? row.created_at.split('T')[0] : '2026-01-15',
       }));
@@ -236,7 +236,7 @@ export const SupabaseDbService = {
           id: row.id,
           agencyId: row.organization_id || DEFAULT_ORG_ID,
           ownerId: row.owner_id || '',
-          ownerName: row.owners ? `${row.owners.first_name} ${row.owners.last_name}` : 'M. Ousmane Ndiaye',
+          ownerName: row.owners ? `${row.owners.first_name} ${row.owners.last_name}` : '',
           name: row.name,
           type: row.type || 'IMMEUBLE',
           address: row.address || '',
@@ -308,6 +308,28 @@ export const SupabaseDbService = {
       return !error;
     } catch (err) {
       console.warn('Supabase deleteProperty error:', err);
+      return false;
+    }
+  },
+
+  async updateProperty(propertyId: string, updates: Partial<Property>): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(propertyId)) return true;
+    try {
+      const payload: any = {};
+      if (updates.ownerId !== undefined) {
+        payload.owner_id = isUUID(updates.ownerId) ? updates.ownerId : null;
+      }
+      if (updates.name) payload.name = updates.name;
+      if (updates.type) payload.type = updates.type;
+      if (updates.totalUnits !== undefined) payload.total_units = updates.totalUnits;
+      if (updates.occupiedUnits !== undefined) payload.occupied_units = updates.occupiedUnits;
+
+      const { error } = await supabase.from('properties').update(payload).eq('id', propertyId);
+      if (error) console.error('Supabase updateProperty error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase updateProperty error:', err);
       return false;
     }
   },
