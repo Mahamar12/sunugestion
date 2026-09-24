@@ -16,7 +16,8 @@ import {
   ChevronRight,
   X,
   Trash2,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
 export default function TenantsPage() {
@@ -25,6 +26,8 @@ export default function TenantsPage() {
   const [showModal, setShowModal] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState<typeof tenants[0] | null>(null);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // New Tenant Form state
   const [firstName, setFirstName] = useState('');
@@ -47,82 +50,90 @@ export default function TenantsPage() {
     );
   });
 
-  const handleCreateTenant = (e: React.FormEvent) => {
+  const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    const unit = units.find((u) => u.id === unitId);
+    setIsSubmitting(true);
+    try {
+      const unit = units.find((u) => u.id === unitId);
 
-    let finalUnitNumber = customUnitName;
-    let finalPropertyName = 'Patrimoine Agence Dakar';
-    let finalPropertyId = 'prop-1';
-    let finalRent = customRent || 300000;
+      let finalUnitNumber = customUnitName;
+      let finalPropertyName = 'Patrimoine Agence Dakar';
+      let finalPropertyId = 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e';
+      let finalRent = customRent || 300000;
 
-    if (unit) {
-      finalUnitNumber = unit.unitNumber;
-      finalPropertyName = unit.propertyName;
-      finalPropertyId = unit.propertyId;
-      finalRent = unit.rentFCFA;
-    } else if (unitId === 'type-maison') {
-      finalUnitNumber = customUnitName || 'Maison';
-      finalPropertyName = 'Villa / Maison Dakar';
-      finalPropertyId = 'prop-2';
-      finalRent = customRent || 700000;
-    } else if (unitId === 'type-appartement') {
-      finalUnitNumber = customUnitName || 'Appartement';
-      finalPropertyName = 'Résidence Les Almadies';
-      finalPropertyId = 'prop-1';
-      finalRent = customRent || 400000;
-    } else if (unitId === 'type-studio') {
-      finalUnitNumber = customUnitName || 'Studio';
-      finalPropertyName = 'Immeuble Liberté 6 Extension';
-      finalPropertyId = 'prop-3';
-      finalRent = customRent || 200000;
-    } else if (unitId === 'type-magasin') {
-      finalUnitNumber = customUnitName || 'Magasin';
-      finalPropertyName = 'Espace Commercial Plateau';
-      finalPropertyId = 'prop-4';
-      finalRent = customRent || 350000;
-    } else if (unitId === 'type-bureau') {
-      finalUnitNumber = customUnitName || 'Bureau';
-      finalPropertyName = 'Espace Commercial Plateau';
-      finalPropertyId = 'prop-4';
-      finalRent = customRent || 500000;
+      if (unit) {
+        finalUnitNumber = unit.unitNumber;
+        finalPropertyName = unit.propertyName;
+        finalPropertyId = unit.propertyId;
+        finalRent = unit.rentFCFA;
+      } else if (unitId === 'type-maison') {
+        finalUnitNumber = customUnitName || 'Maison';
+        finalPropertyName = 'Villa Panoramique Mermoz';
+        finalPropertyId = 'e12a4567-e89b-12d3-a456-426614174001';
+        finalRent = customRent || 700000;
+      } else if (unitId === 'type-appartement') {
+        finalUnitNumber = customUnitName || 'Appartement';
+        finalPropertyName = 'Résidence Teranga Almadies';
+        finalPropertyId = 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e';
+        finalRent = customRent || 400000;
+      } else if (unitId === 'type-studio') {
+        finalUnitNumber = customUnitName || 'Studio';
+        finalPropertyName = 'Immeuble Liberté 6 Extension';
+        finalPropertyId = 'e12a4567-e89b-12d3-a456-426614174002';
+        finalRent = customRent || 200000;
+      } else if (unitId === 'type-magasin') {
+        finalUnitNumber = customUnitName || 'Magasin';
+        finalPropertyName = 'Espace Commercial Plateau';
+        finalPropertyId = 'e12a4567-e89b-12d3-a456-426614174003';
+        finalRent = customRent || 350000;
+      } else if (unitId === 'type-bureau') {
+        finalUnitNumber = customUnitName || 'Bureau';
+        finalPropertyName = 'Espace Commercial Plateau';
+        finalPropertyId = 'e12a4567-e89b-12d3-a456-426614174003';
+        finalRent = customRent || 500000;
+      }
+
+      await addTenant({
+        agencyId: '11111111-1111-1111-1111-111111111111',
+        firstName,
+        lastName,
+        phone,
+        whatsapp: phone,
+        email,
+        address: `${finalPropertyName}, Dakar`,
+        profession,
+        identityDocType: 'CNI',
+        identityDocNumber: identityNum || '1 990 2026 00192',
+        emergencyContact: 'Contact Famille',
+        emergencyPhone: '+221 77 000 00 00',
+        unitId: unit ? unit.id : `unit-custom-${Date.now()}`,
+        unitNumber: finalUnitNumber,
+        propertyName: finalPropertyName,
+        propertyId: finalPropertyId,
+        rentFCFA: finalRent,
+        entryDate: new Date().toISOString().split('T')[0],
+        currentLeaseId: `lse-${Date.now()}`,
+        status: 'ACTIF',
+      });
+
+      setShowModal(false);
+      setFirstName('');
+      setLastName('');
+      setPhone('+221 77 ');
+      setEmail('');
+      setProfession('');
+      setIdentityNum('');
+      setUnitId('type-appartement');
+      setCustomUnitName('Appartement');
+      setCustomRent(400000);
+      setNotificationMsg(`Le locataire ${firstName} ${lastName} a été enregistré avec succès (${finalUnitNumber}).`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } catch (err) {
+      console.error('Erreur enregistrement locataire:', err);
+      setNotificationMsg("Une erreur est survenue lors de l'enregistrement du locataire.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    addTenant({
-      agencyId: 'org-1',
-      firstName,
-      lastName,
-      phone,
-      whatsapp: phone,
-      email,
-      address: `${finalPropertyName}, Dakar`,
-      profession,
-      identityDocType: 'CNI',
-      identityDocNumber: identityNum || '1 990 2026 00192',
-      emergencyContact: 'Contact Famille',
-      emergencyPhone: '+221 77 000 00 00',
-      unitId: unit ? unit.id : `unit-custom-${Date.now()}`,
-      unitNumber: finalUnitNumber,
-      propertyName: finalPropertyName,
-      propertyId: finalPropertyId,
-      rentFCFA: finalRent,
-      entryDate: new Date().toISOString().split('T')[0],
-      currentLeaseId: `lse-${Date.now()}`,
-      status: 'ACTIF',
-    });
-
-    setShowModal(false);
-    setFirstName('');
-    setLastName('');
-    setPhone('+221 77 ');
-    setEmail('');
-    setProfession('');
-    setIdentityNum('');
-    setUnitId('type-appartement');
-    setCustomUnitName('Appartement');
-    setCustomRent(400000);
-    setNotificationMsg(`Le locataire ${firstName} ${lastName} a été enregistré avec succès (${finalUnitNumber}).`);
-    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   return (
@@ -461,15 +472,24 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-lg font-semibold"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md shadow-blue-600/20"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-bold shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 transition-all"
                 >
-                  Enregistrer le Locataire
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <span>Enregistrer le Locataire</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -513,22 +533,42 @@ export default function TenantsPage() {
             <div className="mt-6 flex items-center justify-end gap-3 text-xs">
               <button
                 onClick={() => setTenantToDelete(null)}
+                disabled={isDeleting}
                 className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Annuler
               </button>
               <button
-                onClick={() => {
-                  const name = `${tenantToDelete.firstName} ${tenantToDelete.lastName}`;
-                  deleteTenant(tenantToDelete.id);
-                  setNotificationMsg(`Le locataire ${name} a été supprimé avec succès.`);
-                  setTenantToDelete(null);
-                  setTimeout(() => setNotificationMsg(null), 4000);
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!tenantToDelete) return;
+                  setIsDeleting(true);
+                  try {
+                    const name = `${tenantToDelete.firstName} ${tenantToDelete.lastName}`;
+                    await deleteTenant(tenantToDelete.id);
+                    setNotificationMsg(`Le locataire ${name} a été supprimé avec succès.`);
+                    setTenantToDelete(null);
+                    setTimeout(() => setNotificationMsg(null), 4000);
+                  } catch (err) {
+                    console.error('Erreur suppression locataire:', err);
+                    setNotificationMsg("Erreur lors de la suppression du locataire.");
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Confirmer la suppression</span>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmer la suppression</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

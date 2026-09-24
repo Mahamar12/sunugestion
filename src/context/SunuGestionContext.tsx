@@ -60,8 +60,8 @@ export interface SunuGestionContextType {
   deleteProperty: (propertyId: string) => void;
   addUnit: (unit: Omit<Unit, 'id'>) => void;
   deleteUnit: (unitId: string) => void;
-  addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => void;
-  deleteTenant: (tenantId: string) => void;
+  addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => Promise<Tenant> | void;
+  deleteTenant: (tenantId: string) => Promise<void> | void;
   addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => void;
   deleteOwner: (ownerId: string) => void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
@@ -439,24 +439,24 @@ const INITIAL_OWNERS: Owner[] = [
 
 const INITIAL_TENANTS: Tenant[] = [
   {
-    id: 'ten-1',
+    id: 'afd3365b-cd0e-4a8c-a531-140da3df29f3',
     agencyId: 'org-1',
     firstName: 'Mamadou',
     lastName: 'Diallo',
-    phone: '+221 77 123 45 67',
-    whatsapp: '+221 77 123 45 67',
-    email: 'm.diallo@outlook.com',
+    phone: '+221 77 554 20 18',
+    whatsapp: '+221 77 554 20 18',
+    email: 'm.diallo@sonatel.sn',
     birthDate: '1988-04-14',
     address: 'Almadies, Dakar',
     profession: 'Ingénieur Télécom',
     identityDocType: 'CNI',
-    identityDocNumber: '1 890 1988 00123',
+    identityDocNumber: '1 759 1986 00319',
     emergencyContact: 'Samba Diallo (Frère)',
     emergencyPhone: '+221 77 999 88 77',
-    unitId: 'unit-101',
-    unitNumber: 'Appt 1A - RDC',
-    propertyName: 'Résidence Les Almadies',
-    propertyId: 'prop-1',
+    unitId: '365199fb-2624-4b1b-989d-130e6f3ecd9c',
+    unitNumber: 'Appartement 2B',
+    propertyName: 'Résidence Teranga Almadies',
+    propertyId: 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
     rentFCFA: 400000,
     entryDate: '2026-02-01',
     currentLeaseId: 'lse-1',
@@ -466,51 +466,51 @@ const INITIAL_TENANTS: Tenant[] = [
     createdAt: '2026-02-01',
   },
   {
-    id: 'ten-2',
+    id: 'afd3365b-cd0e-4a8c-a531-140da3df29f4',
     agencyId: 'org-1',
     firstName: 'Aïssatou',
     lastName: 'Kane',
     phone: '+221 78 234 56 78',
     whatsapp: '+221 78 234 56 78',
-    email: 'aissatou.kane@gmail.com',
+    email: 'aissatou.kane@bceao.int',
     birthDate: '1993-09-22',
     address: 'Liberté 6, Dakar',
-    profession: 'Comptable',
+    profession: 'Analyste Financière',
     identityDocType: 'CNI',
-    identityDocNumber: '2 930 1993 00456',
-    emergencyContact: 'Oumy Kane (Sœur)',
-    emergencyPhone: '+221 78 888 77 66',
-    unitId: 'unit-301',
-    unitNumber: 'Studio 1A - 1er Etage',
+    identityDocNumber: '2 759 1991 00824',
+    emergencyContact: 'Dr. Kane (Père)',
+    emergencyPhone: '+221 77 500 12 34',
+    unitId: '365199fb-2624-4b1b-989d-130e6f3ecd9b',
+    unitNumber: 'Appartement 1A',
     propertyName: 'Immeuble Liberté 6 Extension',
-    propertyId: 'prop-3',
-    rentFCFA: 200000,
+    propertyId: 'e12a4567-e89b-12d3-a456-426614174002',
+    rentFCFA: 450000,
     entryDate: '2026-03-01',
     currentLeaseId: 'lse-2',
     totalPaidFCFA: 1000000,
-    arrearsFCFA: 200000,
-    status: 'EN_RETARD',
+    arrearsFCFA: 0,
+    status: 'ACTIF',
     createdAt: '2026-03-01',
   },
   {
-    id: 'ten-3',
+    id: 'afd3365b-cd0e-4a8c-a531-140da3df29f5',
     agencyId: 'org-1',
     firstName: 'Cheikh',
     lastName: 'Faye',
     phone: '+221 76 345 67 89',
     whatsapp: '+221 76 345 67 89',
-    email: 'c.faye@invest.sn',
+    email: 'cheikh.faye@invest-senegal.com',
     birthDate: '1979-11-05',
     address: 'Mermoz Pyrotechnie',
     profession: 'Directeur Général',
-    identityDocType: 'PASSPORT',
-    identityDocNumber: 'A04918239',
-    emergencyContact: 'Seynabou Faye (Epouse)',
-    emergencyPhone: '+221 77 555 44 33',
-    unitId: 'unit-201',
-    unitNumber: 'Villa Complète',
+    identityDocType: 'CNI',
+    identityDocNumber: '1 759 1975 00198',
+    emergencyContact: 'Aminata Faye',
+    emergencyPhone: '+221 77 622 33 44',
+    unitId: '365199fb-2624-4b1b-989d-130e6f3ecd9d',
+    unitNumber: 'Villa Complète Mermoz',
     propertyName: 'Villa Panoramique Mermoz',
-    propertyId: 'prop-2',
+    propertyId: 'e12a4567-e89b-12d3-a456-426614174001',
     rentFCFA: 1200000,
     entryDate: '2026-01-15',
     currentLeaseId: 'lse-3',
@@ -1185,6 +1185,21 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     });
   };
 
+  // Hydratation instantanée LocalStorage pour éviter tout flash d'anciennes données
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('sunu_tenants');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTenants(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStorage hydration notice:', e);
+    }
+  }, []);
+
   // Synchronisation Fullstack Supabase Cloud
   useEffect(() => {
     if (SupabaseDbService.isConfigured()) {
@@ -1205,7 +1220,12 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         if (p && p.length > 0) setProperties(p);
         if (u && u.length > 0) setUnits(u);
         if (o && o.length > 0) setOwners(o);
-        if (t && t.length > 0) setTenants(t);
+        if (t && Array.isArray(t)) {
+          setTenants(t);
+          try {
+            localStorage.setItem('sunu_tenants', JSON.stringify(t));
+          } catch (e) {}
+        }
         if (l && l.length > 0) setLeases(l);
         if (pay && pay.length > 0) setPayments(pay);
         if (exp && exp.length > 0) setExpenses(exp);
@@ -1481,7 +1501,9 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const addTenant = (tenantData: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => {
+  const addTenant = async (
+    tenantData: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>
+  ): Promise<Tenant> => {
     const newId = generateUUID();
     const newTenant: Tenant = {
       ...tenantData,
@@ -1490,21 +1512,55 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       arrearsFCFA: 0,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setTenants((prev) => [newTenant, ...prev]);
-    addAuditLog('CREATION_LOCATAIRE', `Création du locataire ${newTenant.firstName} ${newTenant.lastName}`, 'LOCATAIRE');
 
-    if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.insertTenant(tenantData, newId).catch((err) =>
-        console.warn('Supabase tenant insert notice:', err)
+    // 1. Mise à jour instantanée du state et du LocalStorage
+    setTenants((prev) => {
+      const updated = [newTenant, ...prev.filter((t) => t.id !== newId)];
+      try {
+        localStorage.setItem('sunu_tenants', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (tenantData.unitId) {
+      setUnits((prev) =>
+        prev.map((u) => (u.id === tenantData.unitId ? { ...u, status: 'OCCUPE' } : u))
       );
     }
+
+    addAuditLog(
+      'CREATION_LOCATAIRE',
+      `Création du locataire ${newTenant.firstName} ${newTenant.lastName}`,
+      'LOCATAIRE'
+    );
+
+    // 2. Persistance dans Supabase Cloud
+    if (SupabaseDbService.isConfigured()) {
+      try {
+        const remoteId = await SupabaseDbService.insertTenant(newTenant, newId);
+        if (remoteId && remoteId !== newId) {
+          newTenant.id = remoteId;
+          setTenants((prev) => {
+            const updated = prev.map((t) => (t.id === newId ? { ...t, id: remoteId } : t));
+            try {
+              localStorage.setItem('sunu_tenants', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase tenant insert notice:', err);
+      }
+    }
+
+    return newTenant;
   };
 
-  const deleteTenant = (tenantId: string) => {
+  const deleteTenant = async (tenantId: string): Promise<void> => {
     const tenantToDelete = tenants.find((t) => t.id === tenantId);
     if (!tenantToDelete) return;
 
-    // Free occupied unit if linked
+    // 1. Libérer l'unité occupée si liée
     if (tenantToDelete.unitId) {
       setUnits((prev) =>
         prev.map((u) => (u.id === tenantToDelete.unitId ? { ...u, status: 'DISPONIBLE' } : u))
@@ -1522,7 +1578,14 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       );
     }
 
-    setTenants((prev) => prev.filter((t) => t.id !== tenantId));
+    // 2. Suppression instantanée dans le state et le LocalStorage
+    setTenants((prev) => {
+      const updated = prev.filter((t) => t.id !== tenantId);
+      try {
+        localStorage.setItem('sunu_tenants', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     addAuditLog(
       'SUPPRESSION_LOCATAIRE',
@@ -1540,10 +1603,17 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     };
     setNotifications((prev) => [notif, ...prev]);
 
+    // 3. Suppression dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.deleteTenant(tenantId).catch((err) =>
-        console.warn('Supabase tenant delete notice:', err)
-      );
+      try {
+        await SupabaseDbService.deleteTenant(
+          tenantId,
+          `${tenantToDelete.firstName} ${tenantToDelete.lastName}`,
+          tenantToDelete.phone
+        );
+      } catch (err) {
+        console.warn('Supabase tenant delete notice:', err);
+      }
     }
   };
 

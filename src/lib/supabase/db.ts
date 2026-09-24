@@ -470,20 +470,141 @@ export const SupabaseDbService = {
         console.error('Supabase insertTenant error:', error.message);
         return null;
       }
-      return data?.id || null;
+
+      const tenantId = data?.id || customId;
+
+      // Ensure lease and unit are linked in Supabase so properties and rent persist on refresh
+      if (tenantId && isUUID(tenantId)) {
+        try {
+          // 1. Determine valid property_id
+          let targetPropertyId = tenant.propertyId;
+          if (!isUUID(targetPropertyId)) {
+            const { data: propRow } = await supabase.from('properties').select('id').limit(1).single();
+            targetPropertyId = propRow?.id || 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e';
+          }
+
+          // 2. Determine or create valid unit_id
+          let targetUnitId = tenant.unitId;
+          if (!isUUID(targetUnitId)) {
+            // Check if unit with this number already exists for this property
+            const { data: existingUnit } = await supabase
+              .from('units')
+              .select('id')
+              .eq('property_id', targetPropertyId)
+              .eq('unit_number', tenant.unitNumber || 'Logement')
+              .limit(1)
+              .single();
+
+            if (existingUnit?.id) {
+              targetUnitId = existingUnit.id;
+            } else {
+              // Create a unit in Supabase
+              const { data: createdUnit } = await supabase
+                .from('units')
+                .insert({
+                  property_id: targetPropertyId,
+                  unit_number: tenant.unitNumber || 'Appartement',
+                  monthly_rent_fcfa: tenant.rentFCFA || 350000,
+                  charges_fcfa: 25000,
+                  deposit_fcfa: (tenant.rentFCFA || 350000) * 2,
+                  status: 'OCCUPE',
+                  type: 'APPARTEMENT',
+                  floor: 1,
+                  rooms: 3,
+                  surface_sqm: 80,
+                })
+                .select('id')
+                .single();
+              if (createdUnit?.id) {
+                targetUnitId = createdUnit.id;
+              }
+            }
+          }
+
+          // 3. Insert active lease linking tenant, property and unit
+          if (targetPropertyId && isUUID(targetPropertyId) && targetUnitId && isUUID(targetUnitId)) {
+            await supabase.from('leases').insert({
+              organization_id: DEFAULT_ORG_ID,
+              property_id: targetPropertyId,
+              unit_id: targetUnitId,
+              tenant_id: tenantId,
+              start_date: tenant.entryDate || new Date().toISOString().split('T')[0],
+              rent_amount_fcfa: tenant.rentFCFA || 350000,
+              charges_amount_fcfa: 25000,
+              deposit_amount_fcfa: (tenant.rentFCFA || 350000) * 2,
+              payment_day: 5,
+              status: 'ACTIF',
+            });
+
+            await supabase.from('units').update({ status: 'OCCUPE' }).eq('id', targetUnitId);
+          }
+        } catch (leaseErr) {
+          console.warn('Supabase lease creation warning:', leaseErr);
+        }
+      }
+
+      return tenantId || null;
     } catch (err) {
       console.warn('Supabase insertTenant error:', err);
       return null;
     }
   },
 
-  async deleteTenant(tenantId: string): Promise<boolean> {
+  async deleteTenant(tenantId: string, tenantName?: string, tenantPhone?: string): Promise<boolean> {
     if (!supabase) return false;
-    if (!isUUID(tenantId)) return true;
     try {
-      const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
-      if (error) console.error('Supabase deleteTenant error:', error.message);
-      return !error;
+      let targetId = tenantId;
+
+      // If tenantId is not a UUID, search by phone or name
+      if (!isUUID(targetId)) {
+        if (tenantPhone) {
+          const cleanPhone = tenantPhone.replace(/\s+/g, '');
+          const { data: byPhone } = await supabase
+            .from('tenants')
+            .select('id')
+            .or(`phone.eq.${tenantPhone},phone.eq.${cleanPhone}`)
+            .limit(1)
+            .single();
+          if (byPhone?.id) targetId = byPhone.id;
+        }
+
+        if (!isUUID(targetId) && tenantName) {
+          const parts = tenantName.trim().split(' ');
+          const lastName = parts[parts.length - 1];
+          const firstName = parts[0];
+          const { data: byName } = await supabase
+            .from('tenants')
+            .select('id')
+            .or(`last_name.ilike.%${lastName}%,first_name.ilike.%${firstName}%`)
+            .limit(1)
+            .single();
+          if (byName?.id) targetId = byName.id;
+        }
+      }
+
+      if (isUUID(targetId)) {
+        // Free associated units
+        const { data: leases } = await supabase
+          .from('leases')
+          .select('unit_id')
+          .eq('tenant_id', targetId);
+
+        if (leases && leases.length > 0) {
+          for (const l of leases) {
+            if (l.unit_id && isUUID(l.unit_id)) {
+              await supabase.from('units').update({ status: 'DISPONIBLE' }).eq('id', l.unit_id);
+            }
+          }
+        }
+
+        // Delete from tenants table (cascade deletes leases, arrears, schedules)
+        const { error } = await supabase.from('tenants').delete().eq('id', targetId);
+        if (error) {
+          console.error('Supabase deleteTenant error:', error.message);
+          return false;
+        }
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase deleteTenant error:', err);
       return false;
