@@ -1191,7 +1191,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       const cached = localStorage.getItem('sunu_tenants');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setTenants(parsed);
         }
       }
