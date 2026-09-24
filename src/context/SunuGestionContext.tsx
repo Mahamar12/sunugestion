@@ -62,8 +62,8 @@ export interface SunuGestionContextType {
   deleteUnit: (unitId: string) => void;
   addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => Promise<Tenant> | void;
   deleteTenant: (tenantId: string) => Promise<void> | void;
-  addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => void;
-  deleteOwner: (ownerId: string) => void;
+  addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => Promise<Owner> | void;
+  deleteOwner: (ownerId: string) => Promise<void> | void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
   deleteLease: (leaseId: string) => void;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => void;
@@ -134,7 +134,7 @@ const INITIAL_PROPERTIES: Property[] = [
     city: 'Dakar',
     region: 'Dakar',
     description: 'Immeuble standing R+4 de luxe avec ascenseur, gardiennage 24h/24 et groupe électrogène.',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
     status: 'OCCUPE',
     valuationFCFA: 450000000,
@@ -154,7 +154,7 @@ const INITIAL_PROPERTIES: Property[] = [
     city: 'Dakar',
     region: 'Dakar',
     description: 'Villa de prestige 6 pièces avec piscine privative, garage 3 voitures et jardin paysager.',
-    ownerId: 'own-2',
+    ownerId: '72bdeb8d-06d2-44b8-8cc4-60ae526d6297',
     ownerName: 'Mme Aminata Sow',
     status: 'OCCUPE',
     valuationFCFA: 280000000,
@@ -173,7 +173,7 @@ const INITIAL_PROPERTIES: Property[] = [
     city: 'Dakar',
     region: 'Dakar',
     description: 'Immeuble mixte de 6 appartements standing et 2 studios.',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
     status: 'OCCUPE',
     valuationFCFA: 320000000,
@@ -192,7 +192,7 @@ const INITIAL_PROPERTIES: Property[] = [
     city: 'Dakar',
     region: 'Dakar',
     description: 'Bureaux professionnels et boutiques en plein cœur du centre des affaires.',
-    ownerId: 'own-3',
+    ownerId: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     ownerName: 'M. El Hadji Diop',
     status: 'OCCUPE',
     valuationFCFA: 390000000,
@@ -218,7 +218,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'OCCUPE',
     tenantId: 'ten-1',
     tenantName: 'Mamadou Diallo',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
   },
   {
@@ -235,7 +235,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'EN_RETARD',
     tenantId: 'ten-5',
     tenantName: 'Ibrahima Ba',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
   },
   {
@@ -252,7 +252,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'OCCUPE',
     tenantId: 'ten-3',
     tenantName: 'Cheikh Faye',
-    ownerId: 'own-2',
+    ownerId: '72bdeb8d-06d2-44b8-8cc4-60ae526d6297',
     ownerName: 'Mme Aminata Sow',
   },
   {
@@ -269,7 +269,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'EN_RETARD',
     tenantId: 'ten-2',
     tenantName: 'Aïssatou Kane',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
   },
   {
@@ -286,7 +286,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'OCCUPE',
     tenantId: 'ten-4',
     tenantName: 'Fatou Bintou Seck',
-    ownerId: 'own-3',
+    ownerId: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     ownerName: 'M. El Hadji Diop',
   },
   {
@@ -303,7 +303,7 @@ const INITIAL_UNITS: Unit[] = [
     status: 'OCCUPE',
     tenantId: 'ten-6',
     tenantName: 'Mariama Sy',
-    ownerId: 'own-3',
+    ownerId: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     ownerName: 'M. El Hadji Diop',
   },
   {
@@ -318,7 +318,7 @@ const INITIAL_UNITS: Unit[] = [
     rentFCFA: 700000,
     chargesFCFA: 50000,
     status: 'DISPONIBLE',
-    ownerId: 'own-2',
+    ownerId: '72bdeb8d-06d2-44b8-8cc4-60ae526d6297',
     ownerName: 'Mme Aminata Sow',
   },
   {
@@ -333,7 +333,7 @@ const INITIAL_UNITS: Unit[] = [
     rentFCFA: 450000,
     chargesFCFA: 35000,
     status: 'DISPONIBLE',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
   },
   {
@@ -348,7 +348,7 @@ const INITIAL_UNITS: Unit[] = [
     rentFCFA: 180000,
     chargesFCFA: 15000,
     status: 'DISPONIBLE',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
   },
   {
@@ -363,7 +363,7 @@ const INITIAL_UNITS: Unit[] = [
     rentFCFA: 400000,
     chargesFCFA: 30000,
     status: 'DISPONIBLE',
-    ownerId: 'own-3',
+    ownerId: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     ownerName: 'M. El Hadji Diop',
   },
   {
@@ -378,14 +378,14 @@ const INITIAL_UNITS: Unit[] = [
     rentFCFA: 600000,
     chargesFCFA: 45000,
     status: 'DISPONIBLE',
-    ownerId: 'own-3',
+    ownerId: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     ownerName: 'M. El Hadji Diop',
   },
 ];
 
 const INITIAL_OWNERS: Owner[] = [
   {
-    id: 'own-1',
+    id: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     agencyId: 'org-1',
     firstName: 'Ousmane',
     lastName: 'Ndiaye',
@@ -402,7 +402,7 @@ const INITIAL_OWNERS: Owner[] = [
     createdAt: '2026-01-10',
   },
   {
-    id: 'own-2',
+    id: '72bdeb8d-06d2-44b8-8cc4-60ae526d6297',
     agencyId: 'org-1',
     firstName: 'Aminata',
     lastName: 'Sow',
@@ -419,7 +419,7 @@ const INITIAL_OWNERS: Owner[] = [
     createdAt: '2026-01-12',
   },
   {
-    id: 'own-3',
+    id: '82bdeb8d-06d2-44b8-8cc4-60ae526d6298',
     agencyId: 'org-1',
     firstName: 'El Hadji',
     lastName: 'Diop',
@@ -609,7 +609,7 @@ const INITIAL_LEASES: Lease[] = [
     unitNumber: 'Appt 1A - RDC',
     tenantId: 'ten-1',
     tenantName: 'Mamadou Diallo',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
     startDate: '2026-02-01',
     endDate: '2027-01-31',
@@ -630,7 +630,7 @@ const INITIAL_LEASES: Lease[] = [
     unitNumber: 'Studio 1A - 1er Etage',
     tenantId: 'ten-2',
     tenantName: 'Aïssatou Kane',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
     startDate: '2026-03-01',
     endDate: '2026-09-30',
@@ -651,7 +651,7 @@ const INITIAL_LEASES: Lease[] = [
     unitNumber: 'Villa Complète',
     tenantId: 'ten-3',
     tenantName: 'Cheikh Faye',
-    ownerId: 'own-2',
+    ownerId: '72bdeb8d-06d2-44b8-8cc4-60ae526d6297',
     ownerName: 'Mme Aminata Sow',
     startDate: '2026-01-15',
     endDate: '2027-01-14',
@@ -672,7 +672,7 @@ const INITIAL_LEASES: Lease[] = [
     unitNumber: 'Appt 3B - 3ème Etage',
     tenantId: 'ten-5',
     tenantName: 'Ibrahima Ba',
-    ownerId: 'own-1',
+    ownerId: '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
     ownerName: 'M. Ousmane Ndiaye',
     startDate: '2026-01-01',
     endDate: '2026-12-31',
@@ -1188,11 +1188,18 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
   // Hydratation instantanée LocalStorage pour éviter tout flash d'anciennes données
   useEffect(() => {
     try {
-      const cached = localStorage.getItem('sunu_tenants');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
+      const cachedTenants = localStorage.getItem('sunu_tenants');
+      if (cachedTenants) {
+        const parsed = JSON.parse(cachedTenants);
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setTenants(parsed);
+        }
+      }
+      const cachedOwners = localStorage.getItem('sunu_owners');
+      if (cachedOwners) {
+        const parsedOwners = JSON.parse(cachedOwners);
+        if (Array.isArray(parsedOwners) && parsedOwners.length > 0) {
+          setOwners(parsedOwners);
         }
       }
     } catch (e) {
@@ -1219,7 +1226,12 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       ]).then(([p, u, o, t, l, pay, exp, v]) => {
         if (p && p.length > 0) setProperties(p);
         if (u && u.length > 0) setUnits(u);
-        if (o && o.length > 0) setOwners(o);
+        if (o && Array.isArray(o) && o.length > 0) {
+          setOwners(o);
+          try {
+            localStorage.setItem('sunu_owners', JSON.stringify(o));
+          } catch (e) {}
+        }
         if (t && Array.isArray(t)) {
           setTenants(t);
           try {
@@ -1617,7 +1629,9 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const addOwner = (ownerData: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => {
+  const addOwner = async (
+    ownerData: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>
+  ): Promise<Owner> => {
     const newId = generateUUID();
     const newOwner: Owner = {
       ...ownerData,
@@ -1626,7 +1640,16 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       totalMonthlyRevenueFCFA: ownerData.totalMonthlyRevenueFCFA ?? 1500000,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setOwners((prev) => [newOwner, ...prev]);
+
+    // 1. Mise à jour instantanée du state et du LocalStorage
+    setOwners((prev) => {
+      const updated = [newOwner, ...prev.filter((o) => o.id !== newId)];
+      try {
+        localStorage.setItem('sunu_owners', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
     addAuditLog('CREATION_PROPRIETAIRE', `Nouveau propriétaire enregistré: ${newOwner.firstName} ${newOwner.lastName}`, 'PROPRIETAIRE');
 
     const notif: NotificationItem = {
@@ -1639,23 +1662,64 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     };
     setNotifications((prev) => [notif, ...prev]);
 
+    // 2. Persistance dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.insertOwner(ownerData, newId).catch((err) =>
-        console.warn('Supabase owner insert notice:', err)
-      );
+      try {
+        const remoteId = await SupabaseDbService.insertOwner(ownerData, newId);
+        if (remoteId && remoteId !== newId) {
+          newOwner.id = remoteId;
+          setOwners((prev) => {
+            const updated = prev.map((o) => (o.id === newId ? { ...o, id: remoteId } : o));
+            try {
+              localStorage.setItem('sunu_owners', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase owner insert notice:', err);
+      }
     }
+
+    return newOwner;
   };
 
-  const deleteOwner = (ownerId: string) => {
+  const deleteOwner = async (ownerId: string): Promise<void> => {
     const ownerToDelete = owners.find((o) => o.id === ownerId);
     if (!ownerToDelete) return;
-    setOwners((prev) => prev.filter((o) => o.id !== ownerId));
+
+    // 1. Suppression instantanée dans le state et le LocalStorage
+    setOwners((prev) => {
+      const updated = prev.filter((o) => o.id !== ownerId);
+      try {
+        localStorage.setItem('sunu_owners', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
     addAuditLog('SUPPRESSION_PROPRIETAIRE', `Suppression du bailleur ${ownerToDelete.firstName} ${ownerToDelete.lastName}`, 'PROPRIETAIRE');
 
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      type: 'SYSTEM',
+      title: 'Propriétaire supprimé',
+      message: `Le bailleur ${ownerToDelete.firstName} ${ownerToDelete.lastName} a été supprimé avec succès.`,
+      date: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    // 2. Suppression dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.deleteOwner(ownerId).catch((err) =>
-        console.warn('Supabase owner delete notice:', err)
-      );
+      try {
+        await SupabaseDbService.deleteOwner(
+          ownerId,
+          `${ownerToDelete.firstName} ${ownerToDelete.lastName}`,
+          ownerToDelete.phone
+        );
+      } catch (err) {
+        console.warn('Supabase owner delete notice:', err);
+      }
     }
   };
 

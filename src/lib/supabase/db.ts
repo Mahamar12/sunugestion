@@ -162,13 +162,50 @@ export const SupabaseDbService = {
     }
   },
 
-  async deleteOwner(ownerId: string): Promise<boolean> {
+  async deleteOwner(ownerId: string, ownerName?: string, ownerPhone?: string): Promise<boolean> {
     if (!supabase) return false;
-    if (!isUUID(ownerId)) return true;
     try {
-      const { error } = await supabase.from('owners').delete().eq('id', ownerId);
-      if (error) console.error('Supabase deleteOwner error:', error.message);
-      return !error;
+      let targetId = ownerId;
+
+      // If ownerId is not a UUID, search by phone or name
+      if (!isUUID(targetId)) {
+        if (ownerPhone) {
+          const cleanPhone = ownerPhone.replace(/\s+/g, '');
+          const { data: byPhone } = await supabase
+            .from('owners')
+            .select('id')
+            .or(`phone.eq.${ownerPhone},phone.eq.${cleanPhone}`)
+            .limit(1)
+            .single();
+          if (byPhone?.id) targetId = byPhone.id;
+        }
+
+        if (!isUUID(targetId) && ownerName) {
+          const parts = ownerName.trim().split(' ');
+          const lastName = parts[parts.length - 1];
+          const firstName = parts[0];
+          const { data: byName } = await supabase
+            .from('owners')
+            .select('id')
+            .or(`last_name.ilike.%${lastName}%,first_name.ilike.%${firstName}%`)
+            .limit(1)
+            .single();
+          if (byName?.id) targetId = byName.id;
+        }
+      }
+
+      if (isUUID(targetId)) {
+        // Disassociate any properties or units first to prevent FK constraint violations
+        await supabase.from('units').update({ owner_id: null }).eq('owner_id', targetId);
+        await supabase.from('properties').update({ owner_id: null }).eq('owner_id', targetId);
+
+        const { error } = await supabase.from('owners').delete().eq('id', targetId);
+        if (error) {
+          console.error('Supabase deleteOwner error:', error.message);
+          return false;
+        }
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase deleteOwner error:', err);
       return false;

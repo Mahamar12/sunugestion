@@ -14,7 +14,8 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 
 export default function OwnersPage() {
@@ -23,6 +24,8 @@ export default function OwnersPage() {
   const [showModal, setShowModal] = useState(false);
   const [ownerToDelete, setOwnerToDelete] = useState<typeof owners[0] | null>(null);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // New Owner Form
   const [firstName, setFirstName] = useState('');
@@ -40,37 +43,46 @@ export default function OwnersPage() {
     return fullName.includes(search.toLowerCase()) || phoneMatch;
   });
 
-  const handleCreateOwner = (e: React.FormEvent) => {
+  const handleCreateOwner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim()) return;
 
     const newFirstName = firstName.trim();
     const newLastName = lastName.trim();
 
-    addOwner({
-      agencyId: 'org-1',
-      firstName: newFirstName,
-      lastName: newLastName,
-      phone: phone.trim() || '+221 77 000 00 00',
-      whatsapp: phone.trim() || '+221 77 000 00 00',
-      email: email.trim() || `${newFirstName.toLowerCase()}.${newLastName.toLowerCase()}@gmail.com`,
-      address: address.trim() || 'Dakar',
-      identityDocNumber: '1 890 1978 00412',
-      bankAccount: bankAccount.trim() || 'CBAO SN012 01001 0039281001 45',
-      commissionRatePercent: Number(commissionRate) || 8,
-      totalMonthlyRevenueFCFA: Number(estimatedRevenue) || 1500000,
-      propertiesCount: 1,
-    });
+    setIsSubmitting(true);
+    try {
+      await addOwner({
+        agencyId: 'org-1',
+        firstName: newFirstName,
+        lastName: newLastName,
+        phone: phone.trim() || '+221 77 000 00 00',
+        whatsapp: phone.trim() || '+221 77 000 00 00',
+        email: email.trim() || `${newFirstName.toLowerCase()}.${newLastName.toLowerCase()}@gmail.com`,
+        address: address.trim() || 'Dakar',
+        identityDocNumber: '1 890 1978 00412',
+        bankAccount: bankAccount.trim() || 'CBAO SN012 01001 0039281001 45',
+        commissionRatePercent: Number(commissionRate) || 8,
+        totalMonthlyRevenueFCFA: Number(estimatedRevenue) || 1500000,
+        propertiesCount: 1,
+      });
 
-    setShowModal(false);
-    setFirstName('');
-    setLastName('');
-    setPhone('+221 77 ');
-    setEmail('');
-    setBankAccount('');
-    setEstimatedRevenue(1500000);
-    setNotificationMsg(`Le propriétaire ${newFirstName} ${newLastName} a été enregistré avec succès.`);
-    setTimeout(() => setNotificationMsg(null), 4000);
+      setShowModal(false);
+      setFirstName('');
+      setLastName('');
+      setPhone('+221 77 ');
+      setEmail('');
+      setBankAccount('');
+      setEstimatedRevenue(1500000);
+      setNotificationMsg(`Le propriétaire ${newFirstName} ${newLastName} a été enregistré avec succès.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } catch (err) {
+      console.error('Error creating owner:', err);
+      setNotificationMsg(`Erreur lors de l'enregistrement du propriétaire.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -343,10 +355,20 @@ export default function OwnersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  <UserCheck className="w-4 h-4" />
-                  <span>Enregistrer Propriétaire</span>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      <span>Enregistrer Propriétaire</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -391,23 +413,40 @@ export default function OwnersPage() {
               <button
                 type="button"
                 onClick={() => setOwnerToDelete(null)}
-                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="button"
-                onClick={() => {
+                disabled={isDeleting}
+                onClick={async () => {
                   const name = `${ownerToDelete.firstName} ${ownerToDelete.lastName}`;
-                  deleteOwner(ownerToDelete.id);
-                  setNotificationMsg(`Le propriétaire ${name} a été supprimé.`);
-                  setOwnerToDelete(null);
-                  setTimeout(() => setNotificationMsg(null), 4000);
+                  setIsDeleting(true);
+                  try {
+                    await deleteOwner(ownerToDelete.id);
+                    setNotificationMsg(`Le propriétaire ${name} a été supprimé.`);
+                    setOwnerToDelete(null);
+                    setTimeout(() => setNotificationMsg(null), 4000);
+                  } catch (err) {
+                    console.error('Error deleting owner:', err);
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Confirmer la suppression</span>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmer la suppression</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
