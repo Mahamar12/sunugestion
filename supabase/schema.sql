@@ -336,3 +336,279 @@ VALUES (
   'PRO',
   'ACTIVE'
 ) ON CONFLICT (id) DO NOTHING;
+
+-- ==============================================================================
+-- DONNÉES COMPLÈTES DE DÉMARRAGE (PATRIMOINE IMMOBILIER DAKAR)
+-- ==============================================================================
+
+-- 1. Propriétaire principal
+INSERT INTO public.owners (id, organization_id, first_name, last_name, email, phone, address, city, cni_number, payment_preference, bank_name, bank_rib, commission_rate, notes)
+VALUES (
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  '11111111-1111-1111-1111-111111111111',
+  'Ousmane',
+  'Ndiaye',
+  'ousmane.ndiaye@teranga-invest.sn',
+  '+221 77 638 12 45',
+  'Route des Almadies, Dakar',
+  'Dakar',
+  '1 759 1978 00412',
+  'WAVE',
+  'CBAO Groupe Attijariwafa Bank',
+  'SN012 01001 02345678901 45',
+  8.0,
+  'Bailleur de la Résidence Teranga et de locaux commerciaux au Plateau'
+) ON CONFLICT (id) DO NOTHING;
+
+-- 2. Biens Immobiliers
+INSERT INTO public.properties (id, organization_id, owner_id, name, type, address, neighborhood, city, country, description, total_units, occupied_units, image_url)
+VALUES 
+(
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  '11111111-1111-1111-1111-111111111111',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Résidence Teranga Almadies',
+  'IMMEUBLE',
+  'Route des Almadies, en face Hôtel King Fahd',
+  'Almadies',
+  'Dakar',
+  'Sénégal',
+  'Immeuble moderne R+4 de haut standing, ascenseur, groupe électrogène automatique, réserve d’eau, gardiennage 24/7.',
+  4,
+  3,
+  'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80'
+),
+(
+  'e12a4567-e89b-12d3-a456-426614174001',
+  '11111111-1111-1111-1111-111111111111',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Villa Panoramique Mermoz',
+  'VILLA',
+  'Mermoz Pyrotechnie, Rue MZ-45',
+  'Mermoz',
+  'Dakar',
+  'Sénégal',
+  'Villa de luxe R+1 avec piscine privative, jardin paysager, 5 chambres avec salles d’eau, garage 2 véhicules.',
+  1,
+  1,
+  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80'
+),
+(
+  'e12a4567-e89b-12d3-a456-426614174002',
+  '11111111-1111-1111-1111-111111111111',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Immeuble Liberté 6 Extension',
+  'IMMEUBLE',
+  'Liberté 6 Extension, près Rond-point 2 Voies',
+  'Liberté 6',
+  'Dakar',
+  'Sénégal',
+  'Immeuble résidentiel R+3 composé de 6 appartements F3 et F4, proche commodités et VDN.',
+  6,
+  5,
+  'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80'
+),
+(
+  'e12a4567-e89b-12d3-a456-426614174003',
+  '11111111-1111-1111-1111-111111111111',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Espace Commercial Plateau',
+  'COMMERCIAL',
+  'Boulevard de la République x Rue Huart',
+  'Plateau',
+  'Dakar',
+  'Sénégal',
+  'Immeuble de bureaux et commerces de standing, fibre optique, climatisation centrale, sécurité incendie.',
+  4,
+  4,
+  'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 3. Unités / Logements
+INSERT INTO public.units (id, property_id, owner_id, unit_number, type, floor, rooms, bathrooms, surface_sqm, monthly_rent_fcfa, charges_fcfa, deposit_fcfa, status, features)
+VALUES
+(
+  '365199fb-2624-4b1b-989d-130e6f3ecd9b',
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Appartement 1A',
+  'APPARTEMENT',
+  1,
+  4,
+  3,
+  145.0,
+  450000,
+  35000,
+  900000,
+  'OCCUPE',
+  ARRAY['Climatisation', 'Balcon', 'Vue mer', 'Parking réservé']
+),
+(
+  '365199fb-2624-4b1b-989d-130e6f3ecd9c',
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Appartement 2B',
+  'APPARTEMENT',
+  2,
+  3,
+  2,
+  110.0,
+  380000,
+  30000,
+  760000,
+  'OCCUPE',
+  ARRAY['Climatisation', 'Cuisine équipée', 'Ascenseur']
+),
+(
+  '365199fb-2624-4b1b-989d-130e6f3ecd9d',
+  'e12a4567-e89b-12d3-a456-426614174001',
+  '42bdeb8d-06d2-44b8-8cc4-60ae526d6296',
+  'Villa Complète Mermoz',
+  'VILLA',
+  0,
+  6,
+  5,
+  350.0,
+  1200000,
+  80000,
+  2400000,
+  'OCCUPE',
+  ARRAY['Piscine', 'Jardin', 'Groupe électrogène', 'Poste de garde']
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. Locataires
+INSERT INTO public.tenants (id, organization_id, first_name, last_name, email, phone, cni_number, profession, employer, emergency_contact_name, emergency_contact_phone)
+VALUES
+(
+  'afd3365b-cd0e-4a8c-a531-140da3df29f3',
+  '11111111-1111-1111-1111-111111111111',
+  'Mamadou Lamine',
+  'Diallo',
+  'm.diallo@sonatel.sn',
+  '+221 77 554 20 18',
+  '1 759 1986 00319',
+  'Ingénieur Télécom Senior (Sonatel Orange)',
+  'Sonatel Dakar',
+  'Awa Diallo (Épouse)',
+  '+221 77 640 11 22'
+),
+(
+  'afd3365b-cd0e-4a8c-a531-140da3df29f4',
+  '11111111-1111-1111-1111-111111111111',
+  'Aïssatou',
+  'Kane',
+  'aissatou.kane@bceao.int',
+  '+221 78 234 56 78',
+  '2 759 1991 00824',
+  'Analyste Financière',
+  'BCEAO Siège Dakar',
+  'Dr. Kane (Père)',
+  '+221 77 500 12 34'
+),
+(
+  'afd3365b-cd0e-4a8c-a531-140da3df29f5',
+  '11111111-1111-1111-1111-111111111111',
+  'Cheikh',
+  'Faye',
+  'cheikh.faye@invest-senegal.com',
+  '+221 76 345 67 89',
+  '1 759 1975 00198',
+  'Directeur Général',
+  'Invest Sénégal Consulting',
+  'Aminata Faye',
+  '+221 77 622 33 44'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Baux / Contrats de location
+INSERT INTO public.leases (id, organization_id, property_id, unit_id, tenant_id, start_date, end_date, rent_amount_fcfa, charges_amount_fcfa, deposit_amount_fcfa, payment_day, status)
+VALUES
+(
+  'd6530fc7-9a6c-4025-b145-0bf074dcfa0b',
+  '11111111-1111-1111-1111-111111111111',
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  '365199fb-2624-4b1b-989d-130e6f3ecd9b',
+  'afd3365b-cd0e-4a8c-a531-140da3df29f3',
+  '2026-01-01',
+  '2027-12-31',
+  450000,
+  35000,
+  900000,
+  5,
+  'ACTIF'
+),
+(
+  'd6530fc7-9a6c-4025-b145-0bf074dcfa0c',
+  '11111111-1111-1111-1111-111111111111',
+  'e12a4567-e89b-12d3-a456-426614174001',
+  '365199fb-2624-4b1b-989d-130e6f3ecd9d',
+  'afd3365b-cd0e-4a8c-a531-140da3df29f5',
+  '2026-02-01',
+  '2028-01-31',
+  1200000,
+  80000,
+  2400000,
+  5,
+  'ACTIF'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 6. Paiements & Quittances
+INSERT INTO public.payments (id, organization_id, tenant_id, lease_id, amount_fcfa, payment_date, method, reference_number, status, receipt_number, notes)
+VALUES
+(
+  '7cf567c7-611b-4233-bcdc-e03753e6c343',
+  '11111111-1111-1111-1111-111111111111',
+  'afd3365b-cd0e-4a8c-a531-140da3df29f3',
+  'd6530fc7-9a6c-4025-b145-0bf074dcfa0b',
+  485000,
+  '2026-09-04',
+  'WAVE',
+  'WAVE-SN-20260904-7819',
+  'VALIDE',
+  'REC-2026-09-001',
+  'Loyer Septembre 2026 (450 000 FCFA + 35 000 FCFA charges)'
+),
+(
+  '7cf567c7-611b-4233-bcdc-e03753e6c344',
+  '11111111-1111-1111-1111-111111111111',
+  'afd3365b-cd0e-4a8c-a531-140da3df29f5',
+  'd6530fc7-9a6c-4025-b145-0bf074dcfa0c',
+  1280000,
+  '2026-09-02',
+  'VIREMENT',
+  'VIR-CBAO-20260902-145',
+  'VALIDE',
+  'REC-2026-09-002',
+  'Loyer Septembre 2026 Villa Mermoz'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- 7. Dépenses & Charges
+INSERT INTO public.expenses (id, organization_id, property_id, category, description, amount_fcfa, expense_date, payment_method, recorded_by)
+VALUES
+(
+  '7045f8a4-5241-4f9e-93d1-d9d8588631ae',
+  '11111111-1111-1111-1111-111111111111',
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  'SECURITE',
+  'Facture mensuelle gardiennage jour & nuit - Résidence Teranga',
+  180000,
+  '2026-09-02',
+  'ESPECES',
+  'Sécurité Teranga Pro'
+),
+(
+  '7045f8a4-5241-4f9e-93d1-d9d8588631af',
+  '11111111-1111-1111-1111-111111111111',
+  'd95c65a7-d3c6-47d2-83b1-2355f15acc7e',
+  'MAINTENANCE',
+  'Entretien mensuel ascenseur et vérification groupe électrogène',
+  65000,
+  '2026-09-03',
+  'WAVE',
+  'Ascenseurs du Sénégal'
+)
+ON CONFLICT (id) DO NOTHING;
