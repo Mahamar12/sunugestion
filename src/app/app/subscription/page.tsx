@@ -1,14 +1,28 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import { Crown, CheckCircle2, Zap, ShieldCheck } from 'lucide-react';
 
 export default function SubscriptionPage() {
-  const { organization, saasPlans } = useSunuGestion();
+  const { organization, saasPlans, updateSubscriptionPlan } = useSunuGestion();
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+
+  const handleSelectPlan = (planId: string, planName: string) => {
+    updateSubscriptionPlan(planId);
+    setNotificationMsg(`Félicitations ! Votre forfait a été mis à niveau vers le plan ${planName}.`);
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+      {notificationMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
+
       {/* Active Plan Header */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white p-8 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -67,11 +81,19 @@ export default function SubscriptionPage() {
 
               <div className="pt-6 border-t border-slate-100 mt-6">
                 {isCurrent ? (
-                  <button disabled className="w-full py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl">
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl"
+                  >
                     Plan Actif
                   </button>
                 ) : (
-                  <button className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPlan(plan.id, plan.name)}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
+                  >
                     Changer pour ce plan
                   </button>
                 )}

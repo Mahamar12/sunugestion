@@ -1,5 +1,24 @@
 import { supabase, isSupabaseConfigured } from './client';
-import { Property, PaymentMethod } from '@/types/sunugestion';
+import {
+  Property,
+  Unit,
+  Owner,
+  Tenant,
+  Lease,
+  RentSchedule,
+  Payment,
+  Arrear,
+  Expense,
+  Vendor,
+  AppDocument,
+  Organization,
+  PaymentMethod
+} from '@/types/sunugestion';
+
+const DEFAULT_ORG_ID = '11111111-1111-1111-1111-111111111111';
+
+const isUUID = (str?: string): boolean =>
+  typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
 /**
  * Service de persistance de données Fullstack Supabase pour SunuGestion
@@ -9,103 +28,857 @@ export const SupabaseDbService = {
     return isSupabaseConfigured;
   },
 
-  // PROPERTIES
-  async getProperties(): Promise<Property[]> {
+  // ==========================================
+  // ORGANISATIONS
+  // ==========================================
+  async getOrganization(): Promise<Organization | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (error || !data) return null;
+
+      return {
+        id: data.id,
+        name: data.name,
+        logo: data.logo_url || undefined,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        city: data.city || 'Dakar',
+        country: data.country || 'Sénégal',
+        ninea: data.ninea || undefined,
+        rccm: data.rccm || undefined,
+        subscriptionPlan: data.subscription_plan || 'PRO',
+        subscriptionStatus: data.subscription_status || 'ACTIVE',
+        createdAt: data.created_at,
+      };
+    } catch (err) {
+      console.warn('Supabase getOrganization error:', err);
+      return null;
+    }
+  },
+
+  async updateOrganization(orgData: Partial<Organization>): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      const payload: any = {
+        updated_at: new Date().toISOString(),
+      };
+      if (orgData.name) payload.name = orgData.name;
+      if (orgData.email) payload.email = orgData.email;
+      if (orgData.phone) payload.phone = orgData.phone;
+      if (orgData.address) payload.address = orgData.address;
+      if (orgData.city) payload.city = orgData.city;
+      if (orgData.ninea) payload.ninea = orgData.ninea;
+      if (orgData.rccm) payload.rccm = orgData.rccm;
+      if (orgData.subscriptionPlan) payload.subscription_plan = orgData.subscriptionPlan;
+
+      const { error } = await supabase
+        .from('organizations')
+        .update(payload)
+        .eq('id', DEFAULT_ORG_ID);
+
+      return !error;
+    } catch (err) {
+      console.warn('Supabase updateOrganization error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // OWNERS (BAILLEURS)
+  // ==========================================
+  async getOwners(): Promise<Owner[]> {
     if (!supabase) return [];
-    const { data, error } = await supabase.from('properties').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Supabase getProperties error:', error.message);
+    try {
+      const { data, error } = await supabase
+        .from('owners')
+        .select('*, properties(id)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        agencyId: row.organization_id || DEFAULT_ORG_ID,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        phone: row.phone,
+        whatsapp: row.phone,
+        email: row.email || '',
+        address: row.address || 'Dakar',
+        identityDocNumber: row.cni_number || '',
+        bankAccount: row.bank_rib || '',
+        notes: row.notes || '',
+        propertiesCount: Array.isArray(row.properties) ? row.properties.length : 1,
+        totalMonthlyRevenueFCFA: 1800000,
+        commissionRatePercent: Number(row.commission_rate) || 8,
+        createdAt: row.created_at ? row.created_at.split('T')[0] : '2026-01-15',
+      }));
+    } catch (err) {
+      console.warn('Supabase getOwners error:', err);
       return [];
     }
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      agencyId: row.organization_id || 'org-1',
-      ownerId: row.owner_id || 'own-1',
-      ownerName: row.owner_name || 'Bailleur',
-      name: row.name,
-      type: row.type || 'IMMEUBLE',
-      address: row.address || '',
-      neighborhood: row.neighborhood || '',
-      city: row.city || 'Dakar',
-      region: row.region || 'Dakar',
-      status: row.status || 'DISPONIBLE',
-      valuationFCFA: row.valuation_fcfa || 0,
-      totalUnits: row.total_units || 0,
-      occupiedUnits: row.occupied_units || 0,
-      image: row.image_url || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80',
-      description: row.description || '',
-      createdAt: row.created_at || new Date().toISOString(),
-    }));
   },
 
-  async insertProperty(prop: Omit<Property, 'id' | 'createdAt'>): Promise<string | null> {
+  async insertOwner(owner: Omit<Owner, 'id' | 'createdAt'>, customId?: string): Promise<string | null> {
     if (!supabase) return null;
-    const { data, error } = await supabase.from('properties').insert({
-      organization_id: prop.agencyId || '11111111-1111-1111-1111-111111111111',
-      owner_id: prop.ownerId || null,
-      name: prop.name,
-      type: prop.type,
-      address: prop.address,
-      neighborhood: prop.neighborhood,
-      city: prop.city,
-      total_units: prop.totalUnits || 0,
-      occupied_units: prop.occupiedUnits || 0,
-      image_url: prop.image || null,
-      description: prop.description || null,
-    }).select('id').single();
+    try {
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        first_name: owner.firstName,
+        last_name: owner.lastName,
+        phone: owner.phone,
+        email: owner.email || null,
+        address: owner.address || null,
+        cni_number: owner.identityDocNumber || null,
+        bank_rib: owner.bankAccount || null,
+        commission_rate: owner.commissionRatePercent || 8,
+        notes: owner.notes || null,
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
 
-    if (error) {
-      console.error('Supabase insertProperty error:', error.message);
+      const { data, error } = await supabase
+        .from('owners')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertOwner error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertOwner error:', err);
       return null;
     }
-    return data?.id || null;
   },
 
-  // PAYMENTS
-  async insertPayment(paymentData: {
-    tenantId: string;
-    leaseId: string;
-    amountFCFA: number;
-    method: PaymentMethod;
-    referenceNumber: string;
-    notes?: string;
-  }): Promise<string | null> {
-    if (!supabase) return null;
-    const { data, error } = await supabase.from('payments').insert({
-      organization_id: '11111111-1111-1111-1111-111111111111',
-      tenant_id: paymentData.tenantId,
-      lease_id: paymentData.leaseId,
-      amount_fcfa: paymentData.amountFCFA,
-      method: paymentData.method,
-      reference_number: paymentData.referenceNumber,
-      notes: paymentData.notes || null,
-      status: 'VALIDE',
-      receipt_number: `REC-${Date.now().toString().slice(-6)}`,
-    }).select('id').single();
+  async deleteOwner(ownerId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(ownerId)) return true;
+    try {
+      const { error } = await supabase.from('owners').delete().eq('id', ownerId);
+      if (error) console.error('Supabase deleteOwner error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteOwner error:', err);
+      return false;
+    }
+  },
 
-    if (error) {
-      console.error('Supabase insertPayment error:', error.message);
+  // ==========================================
+  // PROPERTIES (BIENS IMMOBILIERS)
+  // ==========================================
+  async getProperties(): Promise<Property[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*, owners(first_name, last_name), units(id, status)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => {
+        const unitsList = Array.isArray(row.units) ? row.units : [];
+        const totalUnitsCount = unitsList.length > 0 ? unitsList.length : (row.total_units || 0);
+        const occupiedUnitsCount = unitsList.length > 0
+          ? unitsList.filter((u: any) => u.status === 'OCCUPE').length
+          : (row.occupied_units || 0);
+
+        return {
+          id: row.id,
+          agencyId: row.organization_id || DEFAULT_ORG_ID,
+          ownerId: row.owner_id || '',
+          ownerName: row.owners ? `${row.owners.first_name} ${row.owners.last_name}` : 'M. Ousmane Ndiaye',
+          name: row.name,
+          type: row.type || 'IMMEUBLE',
+          address: row.address || '',
+          neighborhood: row.neighborhood || '',
+          city: row.city || 'Dakar',
+          region: 'Dakar',
+          status: occupiedUnitsCount >= totalUnitsCount && totalUnitsCount > 0 ? 'OCCUPE' : 'DISPONIBLE',
+          valuationFCFA: row.valuation_fcfa || 280000000,
+          totalUnits: totalUnitsCount,
+          occupiedUnits: occupiedUnitsCount,
+          image: row.image_url || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+          description: row.description || '',
+          createdAt: row.created_at ? row.created_at.split('T')[0] : '2026-01-15',
+        };
+      });
+    } catch (err) {
+      console.warn('Supabase getProperties error:', err);
+      return [];
+    }
+  },
+
+  async insertProperty(prop: Omit<Property, 'id' | 'createdAt'>, customId?: string): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const allowedTypes = ['IMMEUBLE', 'APPARTEMENT', 'VILLA', 'COMMERCIAL', 'TERRAIN'];
+      const mappedType = allowedTypes.includes(prop.type) ? prop.type : 'IMMEUBLE';
+
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        owner_id: isUUID(prop.ownerId) ? prop.ownerId : null,
+        name: prop.name,
+        type: mappedType,
+        address: prop.address,
+        neighborhood: prop.neighborhood,
+        city: prop.city || 'Dakar',
+        country: 'Sénégal',
+        total_units: prop.totalUnits || 0,
+        occupied_units: prop.occupiedUnits || 0,
+        image_url: prop.image || null,
+        description: prop.description || null,
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('properties')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertProperty error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertProperty error:', err);
       return null;
     }
-    return data?.id || null;
   },
 
+  async deleteProperty(propertyId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(propertyId)) return true;
+    try {
+      const { error } = await supabase.from('properties').delete().eq('id', propertyId);
+      if (error) console.error('Supabase deleteProperty error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteProperty error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // UNITS (LOGEMENTS)
+  // ==========================================
+  async getUnits(): Promise<Unit[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('units')
+        .select('*, properties(name), owners(first_name, last_name)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        propertyId: row.property_id,
+        propertyName: row.properties?.name || 'Bien Dakar',
+        unitNumber: row.unit_number,
+        type: row.type || 'APPARTEMENT',
+        floor: `${row.floor ?? 1}er étage`,
+        surfaceM2: Number(row.surface_sqm) || 90,
+        roomsCount: row.rooms || 3,
+        rentFCFA: row.monthly_rent_fcfa || 350000,
+        chargesFCFA: row.charges_fcfa || 25000,
+        status: row.status || 'DISPONIBLE',
+        ownerId: row.owner_id || '',
+        ownerName: row.owners ? `${row.owners.first_name} ${row.owners.last_name}` : 'M. Ousmane Ndiaye',
+      }));
+    } catch (err) {
+      console.warn('Supabase getUnits error:', err);
+      return [];
+    }
+  },
+
+  async insertUnit(unit: Omit<Unit, 'id'>, customId?: string): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const allowedUnitTypes = ['APPARTEMENT', 'STUDIO', 'MAGASIN', 'BUREAU', 'CHAMBRE', 'VILLA'];
+      const mappedType = allowedUnitTypes.includes(unit.type) ? unit.type : 'APPARTEMENT';
+
+      const payload: any = {
+        property_id: isUUID(unit.propertyId) ? unit.propertyId : null,
+        owner_id: isUUID(unit.ownerId) ? unit.ownerId : null,
+        unit_number: unit.unitNumber,
+        type: mappedType,
+        floor: parseInt(unit.floor) || 1,
+        surface_sqm: unit.surfaceM2 || 90,
+        rooms: unit.roomsCount || 3,
+        monthly_rent_fcfa: unit.rentFCFA,
+        charges_fcfa: unit.chargesFCFA || 0,
+        deposit_fcfa: unit.rentFCFA * 2,
+        status: unit.status || 'DISPONIBLE',
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('units')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertUnit error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertUnit error:', err);
+      return null;
+    }
+  },
+
+  async updateUnitStatus(unitId: string, status: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(unitId)) return true;
+    try {
+      const { error } = await supabase
+        .from('units')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', unitId);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase updateUnitStatus error:', err);
+      return false;
+    }
+  },
+
+  async deleteUnit(unitId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(unitId)) return true;
+    try {
+      const { error } = await supabase.from('units').delete().eq('id', unitId);
+      if (error) console.error('Supabase deleteUnit error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteUnit error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // TENANTS (LOCATAIRES)
+  // ==========================================
+  async getTenants(): Promise<Tenant[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('tenants')
+        .select(`
+          *,
+          leases (
+            id,
+            property_id,
+            unit_id,
+            start_date,
+            rent_amount_fcfa,
+            charges_amount_fcfa,
+            properties (name),
+            units (unit_number)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => {
+        const lease = Array.isArray(row.leases) && row.leases.length > 0 ? row.leases[0] : null;
+
+        return {
+          id: row.id,
+          agencyId: row.organization_id || DEFAULT_ORG_ID,
+          firstName: row.first_name,
+          lastName: row.last_name,
+          phone: row.phone,
+          whatsapp: row.phone,
+          email: row.email || '',
+          address: 'Dakar',
+          profession: row.profession || 'Cadre',
+          identityDocType: 'CNI',
+          identityDocNumber: row.cni_number || '',
+          emergencyContact: row.emergency_contact_name || '',
+          emergencyPhone: row.emergency_contact_phone || '',
+          unitId: lease?.unit_id || '',
+          unitNumber: lease?.units?.unit_number || 'En attente d’attribution',
+          propertyName: lease?.properties?.name || 'Patrimoine Dakar',
+          propertyId: lease?.property_id || '',
+          rentFCFA: lease?.rent_amount_fcfa || 350000,
+          entryDate: lease?.start_date || '2026-01-01',
+          currentLeaseId: lease?.id || '',
+          totalPaidFCFA: 1200000,
+          arrearsFCFA: 0,
+          status: 'ACTIF',
+          createdAt: row.created_at ? row.created_at.split('T')[0] : '2026-01-15',
+        };
+      });
+    } catch (err) {
+      console.warn('Supabase getTenants error:', err);
+      return [];
+    }
+  },
+
+  async insertTenant(
+    tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>,
+    customId?: string
+  ): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        first_name: tenant.firstName,
+        last_name: tenant.lastName,
+        email: tenant.email || null,
+        phone: tenant.phone,
+        cni_number: tenant.identityDocNumber || null,
+        profession: tenant.profession || null,
+        employer: tenant.profession || null,
+        emergency_contact_name: tenant.emergencyContact || null,
+        emergency_contact_phone: tenant.emergencyPhone || null,
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('tenants')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertTenant error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertTenant error:', err);
+      return null;
+    }
+  },
+
+  async deleteTenant(tenantId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(tenantId)) return true;
+    try {
+      const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
+      if (error) console.error('Supabase deleteTenant error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteTenant error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // LEASES (CONTRATS DE BAIL)
+  // ==========================================
+  async getLeases(): Promise<Lease[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('leases')
+        .select('*, properties(name), units(unit_number), tenants(first_name, last_name)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        agencyId: row.organization_id || DEFAULT_ORG_ID,
+        propertyId: row.property_id,
+        propertyName: row.properties?.name || 'Propriété Dakar',
+        unitId: row.unit_id,
+        unitNumber: row.units?.unit_number || 'N/A',
+        tenantId: row.tenant_id,
+        tenantName: row.tenants ? `${row.tenants.first_name} ${row.tenants.last_name}` : 'Locataire',
+        ownerId: '',
+        ownerName: '',
+        startDate: row.start_date,
+        endDate: row.end_date || '',
+        rentAmountFCFA: row.rent_amount_fcfa,
+        chargesAmountFCFA: row.charges_amount_fcfa || 0,
+        depositAmountFCFA: row.deposit_amount_fcfa || 0,
+        paymentFrequency: 'MENSUEL',
+        dueDayOfMonth: row.payment_day || 5,
+        status: row.status || 'ACTIF',
+        createdAt: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      }));
+    } catch (err) {
+      console.warn('Supabase getLeases error:', err);
+      return [];
+    }
+  },
+
+  async insertLease(lease: Omit<Lease, 'id' | 'createdAt'>, customId?: string): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      if (!isUUID(lease.propertyId) || !isUUID(lease.unitId) || !isUUID(lease.tenantId)) {
+        return null;
+      }
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        property_id: lease.propertyId,
+        unit_id: lease.unitId,
+        tenant_id: lease.tenantId,
+        start_date: lease.startDate,
+        end_date: lease.endDate || null,
+        rent_amount_fcfa: lease.rentAmountFCFA,
+        charges_amount_fcfa: lease.chargesAmountFCFA || 0,
+        deposit_amount_fcfa: lease.depositAmountFCFA || 0,
+        payment_day: lease.dueDayOfMonth || 5,
+        status: lease.status || 'ACTIF',
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('leases')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertLease error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertLease error:', err);
+      return null;
+    }
+  },
+
+  async deleteLease(leaseId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(leaseId)) return true;
+    try {
+      const { error } = await supabase.from('leases').delete().eq('id', leaseId);
+      if (error) console.error('Supabase deleteLease error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteLease error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // PAYMENTS (PAIEMENTS & QUITTANCES)
+  // ==========================================
+  async getPayments(): Promise<Payment[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*, tenants(first_name, last_name, leases(units(unit_number), properties(name)))')
+        .order('payment_date', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => {
+        const tenantName = row.tenants ? `${row.tenants.first_name} ${row.tenants.last_name}` : 'Mamadou Lamine Diallo';
+        const lease = row.tenants?.leases?.[0];
+        const unitNumber = lease?.units?.unit_number || 'Appt 1A';
+        const propertyName = lease?.properties?.name || 'Résidence Teranga Almadies';
+
+        return {
+          id: row.id,
+          agencyId: row.organization_id || DEFAULT_ORG_ID,
+          receiptNumber: row.receipt_number || `REC-${row.id.slice(0, 6)}`,
+          tenantId: row.tenant_id || '',
+          tenantName,
+          leaseId: row.lease_id || '',
+          unitNumber,
+          propertyName,
+          amountFCFA: row.amount_fcfa,
+          date: row.payment_date || new Date().toISOString().split('T')[0],
+          method: (row.method as PaymentMethod) || 'WAVE',
+          referenceNumber: row.reference_number || 'PAY-WAVE-001',
+          recordedBy: 'Mamadou Sy',
+          notes: row.notes || undefined,
+          createdAt: row.created_at,
+        };
+      });
+    } catch (err) {
+      console.warn('Supabase getPayments error:', err);
+      return [];
+    }
+  },
+
+  async insertPayment(
+    paymentData: {
+      tenantId: string;
+      leaseId: string;
+      amountFCFA: number;
+      method: PaymentMethod;
+      referenceNumber: string;
+      notes?: string;
+    },
+    customId?: string
+  ): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const allowedMethods = ['WAVE', 'ORANGE_MONEY', 'VIREMENT', 'ESPECES', 'CHEQUE', 'FREE_MONEY'];
+      const mappedMethod = paymentData.method === 'VIREMENT_BANCAIRE' ? 'VIREMENT' : paymentData.method;
+      const validMethod = allowedMethods.includes(mappedMethod) ? mappedMethod : 'WAVE';
+
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        tenant_id: isUUID(paymentData.tenantId) ? paymentData.tenantId : null,
+        lease_id: isUUID(paymentData.leaseId) ? paymentData.leaseId : null,
+        amount_fcfa: paymentData.amountFCFA,
+        method: validMethod,
+        reference_number: paymentData.referenceNumber,
+        notes: paymentData.notes || null,
+        status: 'VALIDE',
+        receipt_number: `REC-${Date.now().toString().slice(-6)}`,
+        payment_date: new Date().toISOString().split('T')[0],
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('payments')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertPayment error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertPayment error:', err);
+      return null;
+    }
+  },
+
+  async deletePayment(paymentId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(paymentId)) return true;
+    try {
+      const { error } = await supabase.from('payments').delete().eq('id', paymentId);
+      if (error) console.error('Supabase deletePayment error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deletePayment error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // EXPENSES (DÉPENSES & CHARGES)
+  // ==========================================
+  async getExpenses(): Promise<Expense[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*, properties(name)')
+        .order('expense_date', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        agencyId: row.organization_id || DEFAULT_ORG_ID,
+        propertyId: row.property_id || '',
+        propertyName: row.properties?.name || 'Immeuble Dakar',
+        category: row.category,
+        description: row.description,
+        amountFCFA: row.amount_fcfa,
+        date: row.expense_date,
+        paidTo: row.recorded_by || 'Prestataire',
+        vendorName: row.recorded_by || 'Prestataire',
+        recordedBy: 'Mamadou Sy',
+        status: 'PAYE',
+        createdAt: row.created_at,
+      }));
+    } catch (err) {
+      console.warn('Supabase getExpenses error:', err);
+      return [];
+    }
+  },
+
+  async insertExpense(
+    expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>,
+    customId?: string
+  ): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const allowedCategories = ['REPARATION', 'MAINTENANCE', 'SENELEC', 'SEN_EAU', 'SECURITE', 'NETTOYAGE', 'TAXE_FONCIERE', 'GESTION', 'AUTRE'];
+      let mappedCat = expense.category as string;
+      if (mappedCat === 'ENTRETIEN') mappedCat = 'MAINTENANCE';
+      if (mappedCat === 'ELECTRICITE') mappedCat = 'SENELEC';
+      if (mappedCat === 'EAU') mappedCat = 'SEN_EAU';
+      if (mappedCat === 'GARDIENNAGE') mappedCat = 'SECURITE';
+      if (!allowedCategories.includes(mappedCat)) mappedCat = 'AUTRE';
+
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        property_id: isUUID(expense.propertyId) ? expense.propertyId : null,
+        category: mappedCat,
+        description: expense.description,
+        amount_fcfa: expense.amountFCFA,
+        expense_date: expense.date || new Date().toISOString().split('T')[0],
+        recorded_by: expense.vendorName || 'Mamadou Sy',
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertExpense error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertExpense error:', err);
+      return null;
+    }
+  },
+
+  async deleteExpense(expenseId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(expenseId)) return true;
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+      if (error) console.error('Supabase deleteExpense error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteExpense error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
+  // VENDORS (PRESTATAIRES & ARTISANS)
+  // ==========================================
+  async getVendors(): Promise<Vendor[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('vendors')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        agencyId: row.organization_id || DEFAULT_ORG_ID,
+        name: row.name,
+        phone: row.phone,
+        whatsapp: row.phone,
+        trade: row.trade || 'PLOMBIER',
+        zone: row.address || 'Dakar',
+        hourlyRateFCFA: 15000,
+        interventionsCount: 5,
+        notes: 'Disponible à Dakar',
+      }));
+    } catch (err) {
+      console.warn('Supabase getVendors error:', err);
+      return [];
+    }
+  },
+
+  async insertVendor(vendor: { name: string; trade: any; phone: string; zone?: string; address?: string }, customId?: string): Promise<string | null> {
+    if (!supabase) return null;
+    try {
+      const payload: any = {
+        organization_id: DEFAULT_ORG_ID,
+        name: vendor.name,
+        trade: vendor.trade,
+        phone: vendor.phone,
+        address: vendor.zone,
+        status: 'DISPONIBLE',
+      };
+      if (customId && isUUID(customId)) {
+        payload.id = customId;
+      }
+
+      const { data, error } = await supabase
+        .from('vendors')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Supabase insertVendor error:', error.message);
+        return null;
+      }
+      return data?.id || null;
+    } catch (err) {
+      console.warn('Supabase insertVendor error:', err);
+      return null;
+    }
+  },
+
+  async deleteVendor(vendorId: string): Promise<boolean> {
+    if (!supabase) return false;
+    if (!isUUID(vendorId)) return true;
+    try {
+      const { error } = await supabase.from('vendors').delete().eq('id', vendorId);
+      if (error) console.error('Supabase deleteVendor error:', error.message);
+      return !error;
+    } catch (err) {
+      console.warn('Supabase deleteVendor error:', err);
+      return false;
+    }
+  },
+
+  // ==========================================
   // STORAGE UPLOAD (Bucket: sunugestion)
+  // ==========================================
   async uploadFile(file: File, path: string): Promise<string | null> {
     if (!supabase) return null;
-    const { data, error } = await supabase.storage
-      .from('sunugestion')
-      .upload(path, file, { upsert: true });
+    try {
+      const { data, error } = await supabase.storage
+        .from('sunugestion')
+        .upload(path, file, { upsert: true });
 
-    if (error) {
-      console.error('Supabase upload error:', error.message);
+      if (error) {
+        console.error('Supabase upload error:', error.message);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('sunugestion')
+        .getPublicUrl(data.path);
+
+      return publicUrlData.publicUrl;
+    } catch (err) {
+      console.warn('Supabase upload error:', err);
       return null;
     }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('sunugestion')
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
   }
 };

@@ -74,8 +74,9 @@ export default function DocumentsPage() {
             </div>
 
             <button
+              type="button"
               onClick={() => setSelectedDocumentForPrint(d)}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Aperçu & Imprimer PDF</span>

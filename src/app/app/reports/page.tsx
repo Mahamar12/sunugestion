@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import { BarChart3, Download, TrendingUp, CreditCard, Receipt, FileText, CheckCircle2 } from 'lucide-react';
 
@@ -11,13 +11,38 @@ export default function ReportsPage() {
   const totalExpenses = expenses.reduce((acc, e) => acc + e.amountFCFA, 0);
   const totalCommissions = Math.round(totalCollected * 0.08); // 8% average commission
   const netIncome = totalCollected - totalExpenses - totalCommissions;
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const handleExportCSV = () => {
-    alert('Exportation CSV générée avec succès pour le registre comptable.');
+    const csvContent =
+      'Date,Categorie,Description,Montant_FCFA\n' +
+      payments.map((p) => `"${p.date}","Recette Loyer","${p.tenantName} - ${p.propertyName} (${p.unitNumber})",${p.amountFCFA}`).join('\n') +
+      '\n' +
+      expenses.map((e) => `"${e.date}","Depense ${e.category}","${e.description} - ${e.propertyName}",-${e.amountFCFA}`).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `rapport-financier-sunugestion-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setDownloadSuccess(true);
+    setTimeout(() => setDownloadSuccess(false), 4000);
   };
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+      {downloadSuccess && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>Fichier CSV généré et téléchargé avec succès !</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
@@ -28,8 +53,9 @@ export default function ReportsPage() {
         </div>
 
         <button
+          type="button"
           onClick={handleExportCSV}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
         >
           <Download className="w-4 h-4" />
           <span>Exporter Rapport Excel / CSV</span>

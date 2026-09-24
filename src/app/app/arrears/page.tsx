@@ -21,6 +21,7 @@ export default function ArrearsPage() {
   const [selectedArrear, setSelectedArrear] = useState<any | null>(null);
   const [relanceChannel, setRelanceChannel] = useState<'WHATSAPP' | 'SMS' | 'EMAIL'>('WHATSAPP');
   const [relanceMessage, setRelanceMessage] = useState('');
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   const filteredArrears = arrears.filter((a) => {
     if (filterAging === 'ALL') return true;
@@ -36,12 +37,23 @@ export default function ArrearsPage() {
 
   const handleSendRelanceSubmit = () => {
     if (!selectedArrear) return;
+    const name = selectedArrear.tenantName;
+    const channel = relanceChannel;
     sendRelance(selectedArrear.id, relanceChannel);
     setSelectedArrear(null);
+    setNotificationMsg(`Relance envoyée par ${channel} à ${name} avec succès !`);
+    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+      {notificationMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -122,8 +134,9 @@ export default function ArrearsPage() {
                   </td>
                   <td className="p-4 text-right space-x-2">
                     <button
+                      type="button"
                       onClick={() => handleOpenRelanceModal(a)}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center gap-1"
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center gap-1 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Envoyer Relance</span>
@@ -138,14 +151,18 @@ export default function ArrearsPage() {
 
       {/* Relance Modal */}
       {selectedArrear && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Relance - {selectedArrear.tenantName}</h3>
                 <p className="text-xs text-rose-600 font-semibold">{selectedArrear.overdueAmountFCFA.toLocaleString('fr-FR')} FCFA en retard</p>
               </div>
-              <button onClick={() => setSelectedArrear(null)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setSelectedArrear(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import {
   Building2,
@@ -15,18 +15,38 @@ import {
   AlertTriangle,
   ArrowLeft,
   DollarSign,
-  Plus
+  Plus,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function PropertyDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const propertyId = params?.id as string;
-  const { properties, units, tenants, maintenanceTickets, expenses } = useSunuGestion();
+  const { properties, units, tenants, maintenanceTickets, expenses, deleteProperty } = useSunuGestion();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const property = properties.find((p) => p.id === propertyId) || properties[0];
-  const propertyUnits = units.filter((u) => u.propertyId === property.id || u.propertyName === property.name);
-  const propertyTickets = maintenanceTickets.filter((t) => t.propertyId === property.id || t.propertyName === property.name);
-  const propertyExpenses = expenses.filter((e) => e.propertyId === property.id || e.propertyName === property.name);
+  const propertyUnits = units.filter((u) => u.propertyId === property?.id || u.propertyName === property?.name);
+  const propertyTickets = maintenanceTickets.filter((t) => t.propertyId === property?.id || t.propertyName === property?.name);
+  const propertyExpenses = expenses.filter((e) => e.propertyId === property?.id || e.propertyName === property?.name);
+
+  if (!property) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-slate-500">Bien immobilier introuvable.</p>
+        <Link href="/app/properties" className="text-blue-600 font-bold text-xs mt-3 inline-block">
+          Retour à la liste
+        </Link>
+      </div>
+    );
+  }
+
+  const handleDelete = () => {
+    deleteProperty(property.id);
+    router.push('/app/properties');
+  };
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -39,7 +59,49 @@ export default function PropertyDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>Retour à la liste des biens</span>
         </Link>
+
+        <button
+          type="button"
+          onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors cursor-pointer"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Supprimer ce bien</span>
+        </button>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600 mb-3">
+              <div className="p-2 bg-rose-50 rounded-xl">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">Supprimer ce bien ?</h3>
+            </div>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer définitivement <span className="font-bold text-slate-900">"{property.name}"</span> ({property.address}) ? Toutes les unités associées seront également retirées.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
+              >
+                Confirmer la suppression
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Property Overview Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-3">

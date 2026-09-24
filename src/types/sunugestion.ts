@@ -40,6 +40,7 @@ export type PropertyType =
   | 'VILLA' 
   | 'MAISON' 
   | 'STUDIO' 
+  | 'MAGASIN'
   | 'BOUTIQUE' 
   | 'BUREAU' 
   | 'TERRAIN' 

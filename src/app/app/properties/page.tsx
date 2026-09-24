@@ -17,15 +17,17 @@ import {
   Wrench,
   DollarSign,
   ChevronRight,
+  Trash2,
   X
 } from 'lucide-react';
 
 export default function PropertiesPage() {
-  const { properties, owners, addProperty } = useSunuGestion();
+  const { properties, owners, addProperty, deleteProperty } = useSunuGestion();
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [propertyToDelete, setPropertyToDelete] = useState<any>(null);
 
   // New property form state
   const [name, setName] = useState('');
@@ -36,6 +38,7 @@ export default function PropertiesPage() {
   const [ownerId, setOwnerId] = useState(owners[0]?.id || '');
   const [valuation, setValuation] = useState(250000000);
   const [description, setDescription] = useState('');
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   const filteredProperties = properties.filter((p) => {
     const matchesSearch =
@@ -72,14 +75,23 @@ export default function PropertiesPage() {
     });
 
     setShowAddModal(false);
+    setNotificationMsg(`Le bien "${name}" a été ajouté avec succès au patrimoine.`);
+    setTimeout(() => setNotificationMsg(null), 4000);
     setName('');
     setDescription('');
   };
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
+      {notificationMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
+
       {/* Top Title & Quick Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Biens Immobiliers</h1>
           <p className="text-xs text-slate-500 mt-1">
@@ -88,8 +100,9 @@ export default function PropertiesPage() {
         </div>
 
         <button
+          type="button"
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Ajouter un Bien</span>
@@ -189,12 +202,22 @@ export default function PropertiesPage() {
                   <Home className="w-4 h-4 text-blue-600" />
                   <span>{p.occupiedUnits} / {p.totalUnits} Logements occupés</span>
                 </div>
-                <Link
-                  href={`/app/properties/${p.id}`}
-                  className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-0.5"
-                >
-                  Voir fiche <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/app/properties/${p.id}`}
+                    className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-0.5"
+                  >
+                    Voir fiche <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setPropertyToDelete(p)}
+                    className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    title={`Supprimer ${p.name}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -203,11 +226,15 @@ export default function PropertiesPage() {
 
       {/* New Property Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base">Ajouter un nouveau Bien Immobilier</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -319,6 +346,66 @@ export default function PropertiesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {propertyToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 text-base">Supprimer ce bien immobilier ?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Êtes-vous sûr de vouloir supprimer définitivement <strong className="text-slate-800">{propertyToDelete.name}</strong> ({propertyToDelete.neighborhood}) ?
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPropertyToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Conséquences de la suppression :</p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Les logements et baux rattachés à ce bien seront également retirés.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setPropertyToDelete(null)}
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const name = propertyToDelete.name;
+                  deleteProperty(propertyToDelete.id);
+                  setNotificationMsg(`Le bien "${name}" a été supprimé avec succès.`);
+                  setPropertyToDelete(null);
+                  setTimeout(() => setNotificationMsg(null), 4000);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

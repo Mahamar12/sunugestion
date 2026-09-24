@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import {
   User,
@@ -18,16 +18,20 @@ import {
   Mail,
   MapPin,
   CheckCircle2,
-  Printer
+  Printer,
+  Trash2,
+  X
 } from 'lucide-react';
 
 export default function TenantDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const tenantId = params?.id as string;
-  const { tenants, leases, payments, arrears, documents, maintenanceTickets, auditLogs, setSelectedDocumentForPrint } = useSunuGestion();
+  const { tenants, leases, payments, arrears, documents, maintenanceTickets, auditLogs, setSelectedDocumentForPrint, deleteTenant } = useSunuGestion();
 
   const tenant = tenants.find((t) => t.id === tenantId) || tenants[0];
-  const [activeTab, setActiveTab] = useState<'INFO' | 'HOUSING' | 'CONTRACT' | 'PAYMENTS' | 'ARREARS' | 'DOCS' | 'MAINTENANCE' | 'TIMELINE'>('INFO');
+  const [activeTab, setActiveTab] = useState<'INFO' | 'HOUSING' | 'CONTRACT' | 'PAYMENTS' | 'ARREARS' | 'DOCS' | 'TIMELINE'>('INFO');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const tenantLease = leases.find((l) => l.tenantId === tenant.id) || leases[0];
   const tenantPayments = payments.filter((p) => p.tenantId === tenant.id);
@@ -42,8 +46,7 @@ export default function TenantDetailPage() {
     { id: 'PAYMENTS', label: '4. Paiements', icon: CreditCard },
     { id: 'ARREARS', label: '5. Impayés', icon: AlertTriangle },
     { id: 'DOCS', label: '6. Documents', icon: FileBox },
-    { id: 'MAINTENANCE', label: '7. Maintenance', icon: Wrench },
-    { id: 'TIMELINE', label: '8. Historique & Timeline', icon: Clock },
+    { id: 'TIMELINE', label: '7. Historique & Timeline', icon: Clock },
   ];
 
   return (
@@ -54,6 +57,16 @@ export default function TenantDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>Retour à la liste des locataires</span>
         </Link>
+
+        {tenant && (
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl transition-all shadow-sm"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Supprimer ce locataire</span>
+          </button>
+        )}
       </div>
 
       {/* Tenant Card Header */}
@@ -235,25 +248,6 @@ export default function TenantDetailPage() {
           </div>
         )}
 
-        {activeTab === 'MAINTENANCE' && (
-          <div className="space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Demandes de Maintenance</h3>
-            {tenantTickets.length === 0 ? (
-              <p className="text-slate-500">Aucune demande de maintenance active.</p>
-            ) : (
-              tenantTickets.map((t) => (
-                <div key={t.id} className="p-3 bg-slate-50 rounded-lg border flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-slate-900">{t.title}</p>
-                    <p className="text-slate-500 text-[11px]">{t.description}</p>
-                  </div>
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">{t.status}</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
         {activeTab === 'TIMELINE' && (
           <div className="space-y-4">
             <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Timeline des Événements</h3>
@@ -272,6 +266,61 @@ export default function TenantDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && tenant && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 text-base">Supprimer définitivement ce locataire ?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Êtes-vous sûr de vouloir supprimer <strong className="text-slate-800">{tenant.firstName} {tenant.lastName}</strong> ?
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Conséquences de la suppression :</p>
+                <ul className="list-disc list-inside mt-1 text-[11px] text-amber-700 space-y-0.5">
+                  <li>Le logement <strong className="font-semibold">{tenant.unitNumber} ({tenant.propertyName})</strong> sera libéré et repassera au statut <strong>Disponible</strong>.</li>
+                  <li>Le profil et ses historiques associés seront supprimés.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 text-xs">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  deleteTenant(tenant.id);
+                  router.push('/app/tenants');
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

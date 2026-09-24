@@ -57,14 +57,25 @@ export interface SunuGestionContextType {
   }) => void;
 
   addProperty: (property: Omit<Property, 'id' | 'createdAt'>) => void;
+  deleteProperty: (propertyId: string) => void;
   addUnit: (unit: Omit<Unit, 'id'>) => void;
+  deleteUnit: (unitId: string) => void;
   addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => void;
-  addOwner: (owner: Omit<Owner, 'id' | 'createdAt' | 'propertiesCount' | 'totalMonthlyRevenueFCFA'>) => void;
+  deleteTenant: (tenantId: string) => void;
+  addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => void;
+  deleteOwner: (ownerId: string) => void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
+  deleteLease: (leaseId: string) => void;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => void;
+  deleteExpense: (expenseId: string) => void;
+  deletePayment: (paymentId: string) => void;
   createMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateTicketStatus: (ticketId: string, status: MaintenanceTicket['status'], vendorId?: string) => void;
   sendRelance: (arrearId: string, channel: 'SMS' | 'WHATSAPP' | 'EMAIL') => void;
+  addVendor: (vendor: Omit<Vendor, 'id' | 'agencyId'>) => void;
+  deleteVendor: (vendorId: string) => void;
+  updateOrganization: (orgData: Partial<Organization>) => void;
+  updateSubscriptionPlan: (planId: string) => void;
   
   // Search
   searchQuery: string;
@@ -73,6 +84,11 @@ export interface SunuGestionContextType {
   // Document preview trigger
   selectedDocumentForPrint: AppDocument | null;
   setSelectedDocumentForPrint: (doc: AppDocument | null) => void;
+
+  // Mobile Navigation
+  isMobileSidebarOpen: boolean;
+  setIsMobileSidebarOpen: (open: boolean) => void;
+  toggleMobileSidebar: () => void;
 }
 
 export const SunuGestionContext = createContext<SunuGestionContextType | undefined>(undefined);
@@ -277,8 +293,8 @@ const INITIAL_UNITS: Unit[] = [
     id: 'unit-402',
     propertyId: 'prop-4',
     propertyName: 'Espace Commercial Plateau',
-    unitNumber: 'Boutique B02',
-    type: 'BOUTIQUE',
+    unitNumber: 'Magasin M02',
+    type: 'MAGASIN',
     floor: 'RDC',
     surfaceM2: 60,
     roomsCount: 2,
@@ -287,6 +303,81 @@ const INITIAL_UNITS: Unit[] = [
     status: 'OCCUPE',
     tenantId: 'ten-6',
     tenantName: 'Mariama Sy',
+    ownerId: 'own-3',
+    ownerName: 'M. El Hadji Diop',
+  },
+  {
+    id: 'unit-202',
+    propertyId: 'prop-2',
+    propertyName: 'Villa Panoramique Mermoz',
+    unitNumber: 'Maison F4 - R+1',
+    type: 'MAISON',
+    floor: 'RDC + 1',
+    surfaceM2: 220,
+    roomsCount: 4,
+    rentFCFA: 700000,
+    chargesFCFA: 50000,
+    status: 'DISPONIBLE',
+    ownerId: 'own-2',
+    ownerName: 'Mme Aminata Sow',
+  },
+  {
+    id: 'unit-103',
+    propertyId: 'prop-1',
+    propertyName: 'Résidence Les Almadies',
+    unitNumber: 'Appt 2B - 2ème Etage',
+    type: 'APPARTEMENT',
+    floor: '2ème étage',
+    surfaceM2: 130,
+    roomsCount: 3,
+    rentFCFA: 450000,
+    chargesFCFA: 35000,
+    status: 'DISPONIBLE',
+    ownerId: 'own-1',
+    ownerName: 'M. Ousmane Ndiaye',
+  },
+  {
+    id: 'unit-302',
+    propertyId: 'prop-3',
+    propertyName: 'Immeuble Liberté 6 Extension',
+    unitNumber: 'Studio 2B - 2ème Etage',
+    type: 'STUDIO',
+    floor: '2ème étage',
+    surfaceM2: 40,
+    roomsCount: 1,
+    rentFCFA: 180000,
+    chargesFCFA: 15000,
+    status: 'DISPONIBLE',
+    ownerId: 'own-1',
+    ownerName: 'M. Ousmane Ndiaye',
+  },
+  {
+    id: 'unit-403',
+    propertyId: 'prop-4',
+    propertyName: 'Espace Commercial Plateau',
+    unitNumber: 'Magasin M01 - RDC',
+    type: 'MAGASIN',
+    floor: 'RDC',
+    surfaceM2: 75,
+    roomsCount: 2,
+    rentFCFA: 400000,
+    chargesFCFA: 30000,
+    status: 'DISPONIBLE',
+    ownerId: 'own-3',
+    ownerName: 'M. El Hadji Diop',
+  },
+  {
+    id: 'unit-404',
+    propertyId: 'prop-4',
+    propertyName: 'Espace Commercial Plateau',
+    unitNumber: 'Bureau 305 - 3ème Etage',
+    type: 'BUREAU',
+    floor: '3ème étage',
+    surfaceM2: 95,
+    roomsCount: 3,
+    rentFCFA: 600000,
+    chargesFCFA: 45000,
+    status: 'DISPONIBLE',
     ownerId: 'own-3',
     ownerName: 'M. El Hadji Diop',
   },
@@ -1078,19 +1169,48 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDocumentForPrint, setSelectedDocumentForPrint] = useState<AppDocument | null>(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
-  // Synchronisation Fullstack Supabase
+  const toggleMobileSidebar = () => setIsMobileSidebarOpen((prev) => !prev);
+
+  // Helper UUID
+  const generateUUID = (): string => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  // Synchronisation Fullstack Supabase Cloud
   useEffect(() => {
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.getProperties().then((remoteProps) => {
-        if (remoteProps && remoteProps.length > 0) {
-          setProperties((prev) => {
-            const remoteIds = new Set(remoteProps.map((p) => p.id));
-            const existingFiltered = prev.filter((p) => !remoteIds.has(p.id));
-            return [...remoteProps, ...existingFiltered];
-          });
-        }
+      SupabaseDbService.getOrganization().then((remoteOrg) => {
+        if (remoteOrg) setOrganization(remoteOrg);
       });
+
+      Promise.all([
+        SupabaseDbService.getProperties(),
+        SupabaseDbService.getUnits(),
+        SupabaseDbService.getOwners(),
+        SupabaseDbService.getTenants(),
+        SupabaseDbService.getLeases(),
+        SupabaseDbService.getPayments(),
+        SupabaseDbService.getExpenses(),
+        SupabaseDbService.getVendors(),
+      ]).then(([p, u, o, t, l, pay, exp, v]) => {
+        if (p && p.length > 0) setProperties(p);
+        if (u && u.length > 0) setUnits(u);
+        if (o && o.length > 0) setOwners(o);
+        if (t && t.length > 0) setTenants(t);
+        if (l && l.length > 0) setLeases(l);
+        if (pay && pay.length > 0) setPayments(pay);
+        if (exp && exp.length > 0) setExpenses(exp);
+        if (v && v.length > 0) setVendors(v);
+      }).catch((err) => console.warn('Supabase sync notice:', err));
     }
   }, []);
 
@@ -1137,9 +1257,10 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     const tenant = tenants.find((t) => t.id === data.tenantId);
     const lease = leases.find((l) => l.id === data.leaseId);
     const receiptNum = `QUITT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newId = generateUUID();
 
     const newPayment: Payment = {
-      id: `pay-${Date.now()}`,
+      id: newId,
       agencyId: organization.id,
       receiptNumber: receiptNum,
       tenantId: data.tenantId,
@@ -1194,7 +1315,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
 
     // Generate Quittance Document
     const newDoc: AppDocument = {
-      id: `doc-${Date.now()}`,
+      id: generateUUID(),
       title: `Quittance de Loyer - ${receiptNum} - ${tenant?.firstName} ${tenant?.lastName}`,
       category: 'QUITTANCE',
       tenantName: `${tenant?.firstName} ${tenant?.lastName}`,
@@ -1206,7 +1327,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
 
     // Push notification
     const notif: NotificationItem = {
-      id: `notif-${Date.now()}`,
+      id: generateUUID(),
       type: 'PAYMENT',
       title: 'Paiement Enregistré avec Succès',
       message: `Quittance ${receiptNum} générée pour ${tenant?.firstName} ${tenant?.lastName} (${data.amountFCFA.toLocaleString('fr-FR')} FCFA via ${data.method}).`,
@@ -1218,32 +1339,85 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     addAuditLog('ENREGISTREMENT_PAIEMENT', `Enregistrement du paiement ${data.amountFCFA} FCFA (${data.method}) ref: ${data.referenceNumber}`, 'PAIEMENT');
 
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.insertPayment(data).catch((err) =>
+      SupabaseDbService.insertPayment(data, newId).catch((err) =>
         console.warn('Supabase payment sync notice:', err)
       );
     }
   };
 
+  const deletePayment = (paymentId: string) => {
+    const paymentToDelete = payments.find((p) => p.id === paymentId);
+    if (!paymentToDelete) return;
+
+    setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+    addAuditLog('SUPPRESSION_PAIEMENT', `Suppression du paiement ${paymentToDelete.receiptNumber}`, 'PAIEMENT');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deletePayment(paymentId).catch((err) =>
+        console.warn('Supabase deletePayment error:', err)
+      );
+    }
+  };
+
   const addProperty = (propData: Omit<Property, 'id' | 'createdAt'>) => {
+    const newId = generateUUID();
     const newProp: Property = {
       ...propData,
-      id: `prop-${Date.now()}`,
+      id: newId,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setProperties((prev) => [newProp, ...prev]);
     addAuditLog('CREATION_PROPRIETE', `Ajout de la propriété "${newProp.name}" à ${newProp.neighborhood}`, 'PROPRIETE');
 
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Bien Immobilier Ajouté',
+      message: `Le bien "${newProp.name}" (${newProp.type}) à ${newProp.neighborhood} a été créé avec succès.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.insertProperty(propData).catch((err) =>
+      SupabaseDbService.insertProperty(propData, newId).catch((err) =>
         console.warn('Supabase property sync notice:', err)
       );
     }
   };
 
+  const deleteProperty = (propertyId: string) => {
+    const propToDelete = properties.find((p) => p.id === propertyId);
+    if (!propToDelete) return;
+
+    setProperties((prev) => prev.filter((p) => p.id !== propertyId));
+    setUnits((prev) => prev.filter((u) => u.propertyId !== propertyId));
+    setLeases((prev) => prev.filter((l) => l.propertyId !== propertyId));
+
+    addAuditLog('SUPPRESSION_PROPRIETE', `Suppression du bien ${propToDelete.name}`, 'PROPRIETE');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Bien Immobilier Supprimé',
+      message: `Le bien "${propToDelete.name}" (${propToDelete.neighborhood}) a été supprimé.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteProperty(propertyId).catch((err) =>
+        console.warn('Supabase deleteProperty error:', err)
+      );
+    }
+  };
+
   const addUnit = (unitData: Omit<Unit, 'id'>) => {
+    const newId = generateUUID();
     const newUnit: Unit = {
       ...unitData,
-      id: `unit-${Date.now()}`,
+      id: newId,
     };
     setUnits((prev) => [...prev, newUnit]);
     
@@ -1262,43 +1436,176 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     );
 
     addAuditLog('CREATION_LOGEMENT', `Ajout de l'unité ${newUnit.unitNumber} (${newUnit.propertyName})`, 'UNITE');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Logement Ajouté',
+      message: `L'unité "${newUnit.unitNumber}" a été ajoutée à ${newUnit.propertyName}.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertUnit(unitData, newId).catch((err) =>
+        console.warn('Supabase unit insert notice:', err)
+      );
+    }
+  };
+
+  const deleteUnit = (unitId: string) => {
+    const unitToDelete = units.find((u) => u.id === unitId);
+    if (!unitToDelete) return;
+
+    setUnits((prev) => prev.filter((u) => u.id !== unitId));
+    setProperties((prev) =>
+      prev.map((p) => {
+        if (p.id === unitToDelete.propertyId) {
+          return {
+            ...p,
+            totalUnits: Math.max(0, p.totalUnits - 1),
+            occupiedUnits: unitToDelete.status === 'OCCUPE' ? Math.max(0, p.occupiedUnits - 1) : p.occupiedUnits,
+          };
+        }
+        return p;
+      })
+    );
+
+    addAuditLog('SUPPRESSION_LOGEMENT', `Suppression de l'unité ${unitToDelete.unitNumber}`, 'UNITE');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteUnit(unitId).catch((err) =>
+        console.warn('Supabase deleteUnit error:', err)
+      );
+    }
   };
 
   const addTenant = (tenantData: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => {
+    const newId = generateUUID();
     const newTenant: Tenant = {
       ...tenantData,
-      id: `ten-${Date.now()}`,
+      id: newId,
       totalPaidFCFA: 0,
       arrearsFCFA: 0,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setTenants((prev) => [newTenant, ...prev]);
     addAuditLog('CREATION_LOCATAIRE', `Création du locataire ${newTenant.firstName} ${newTenant.lastName}`, 'LOCATAIRE');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertTenant(tenantData, newId).catch((err) =>
+        console.warn('Supabase tenant insert notice:', err)
+      );
+    }
   };
 
-  const addOwner = (ownerData: Omit<Owner, 'id' | 'createdAt' | 'propertiesCount' | 'totalMonthlyRevenueFCFA'>) => {
+  const deleteTenant = (tenantId: string) => {
+    const tenantToDelete = tenants.find((t) => t.id === tenantId);
+    if (!tenantToDelete) return;
+
+    // Free occupied unit if linked
+    if (tenantToDelete.unitId) {
+      setUnits((prev) =>
+        prev.map((u) => (u.id === tenantToDelete.unitId ? { ...u, status: 'DISPONIBLE' } : u))
+      );
+      setProperties((prev) =>
+        prev.map((p) => {
+          if (p.id === tenantToDelete.propertyId) {
+            return {
+              ...p,
+              occupiedUnits: Math.max(0, p.occupiedUnits - 1),
+            };
+          }
+          return p;
+        })
+      );
+    }
+
+    setTenants((prev) => prev.filter((t) => t.id !== tenantId));
+
+    addAuditLog(
+      'SUPPRESSION_LOCATAIRE',
+      `Suppression définitive du locataire ${tenantToDelete.firstName} ${tenantToDelete.lastName}`,
+      'LOCATAIRE'
+    );
+
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      type: 'SYSTEM',
+      title: 'Locataire supprimé',
+      message: `Le locataire ${tenantToDelete.firstName} ${tenantToDelete.lastName} a été supprimé. Le logement ${tenantToDelete.unitNumber} est désormais disponible.`,
+      date: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteTenant(tenantId).catch((err) =>
+        console.warn('Supabase tenant delete notice:', err)
+      );
+    }
+  };
+
+  const addOwner = (ownerData: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => {
+    const newId = generateUUID();
     const newOwner: Owner = {
       ...ownerData,
-      id: `own-${Date.now()}`,
-      propertiesCount: 0,
-      totalMonthlyRevenueFCFA: 0,
+      id: newId,
+      propertiesCount: ownerData.propertiesCount ?? 1,
+      totalMonthlyRevenueFCFA: ownerData.totalMonthlyRevenueFCFA ?? 1500000,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setOwners((prev) => [newOwner, ...prev]);
     addAuditLog('CREATION_PROPRIETAIRE', `Nouveau propriétaire enregistré: ${newOwner.firstName} ${newOwner.lastName}`, 'PROPRIETAIRE');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Nouveau Propriétaire',
+      message: `Le bailleur ${newOwner.firstName} ${newOwner.lastName} a été ajouté avec succès.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertOwner(ownerData, newId).catch((err) =>
+        console.warn('Supabase owner insert notice:', err)
+      );
+    }
+  };
+
+  const deleteOwner = (ownerId: string) => {
+    const ownerToDelete = owners.find((o) => o.id === ownerId);
+    if (!ownerToDelete) return;
+    setOwners((prev) => prev.filter((o) => o.id !== ownerId));
+    addAuditLog('SUPPRESSION_PROPRIETAIRE', `Suppression du bailleur ${ownerToDelete.firstName} ${ownerToDelete.lastName}`, 'PROPRIETAIRE');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteOwner(ownerId).catch((err) =>
+        console.warn('Supabase owner delete notice:', err)
+      );
+    }
   };
 
   const createLease = (leaseData: Omit<Lease, 'id' | 'createdAt'>) => {
+    const newId = generateUUID();
     const newLease: Lease = {
       ...leaseData,
-      id: `lse-${Date.now()}`,
+      id: newId,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setLeases((prev) => [newLease, ...prev]);
 
+    // Mark unit as occupied
+    setUnits((prev) =>
+      prev.map((u) => (u.id === leaseData.unitId ? { ...u, status: 'OCCUPE' } : u))
+    );
+
     // Create schedule for first month
     const newSchedule: RentSchedule = {
-      id: `sch-${Date.now()}`,
+      id: generateUUID(),
       leaseId: newLease.id,
       tenantId: newLease.tenantId,
       tenantName: newLease.tenantName,
@@ -1316,17 +1623,84 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     setRentSchedules((prev) => [newSchedule, ...prev]);
 
     addAuditLog('CREATION_CONTRAT', `Nouveau contrat de location créé pour ${newLease.tenantName} (${newLease.unitNumber})`, 'CONTRAT');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Nouveau Contrat de Bail',
+      message: `Contrat établi pour ${newLease.tenantName} (${newLease.unitNumber}).`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertLease(leaseData, newId).catch((err) =>
+        console.warn('Supabase lease insert notice:', err)
+      );
+    }
+  };
+
+  const deleteLease = (leaseId: string) => {
+    const leaseToDelete = leases.find((l) => l.id === leaseId);
+    if (!leaseToDelete) return;
+
+    if (leaseToDelete.unitId) {
+      setUnits((prev) =>
+        prev.map((u) => (u.id === leaseToDelete.unitId ? { ...u, status: 'DISPONIBLE' } : u))
+      );
+    }
+
+    setLeases((prev) => prev.filter((l) => l.id !== leaseId));
+    addAuditLog('SUPPRESSION_CONTRAT', `Suppression du contrat ${leaseId}`, 'CONTRAT');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteLease(leaseId).catch((err) =>
+        console.warn('Supabase deleteLease error:', err)
+      );
+    }
   };
 
   const addExpense = (expenseData: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => {
+    const newId = generateUUID();
     const newExpense: Expense = {
       ...expenseData,
-      id: `exp-${Date.now()}`,
+      id: newId,
       recordedBy: currentUser.name,
       createdAt: new Date().toISOString().split('T')[0],
     };
     setExpenses((prev) => [newExpense, ...prev]);
     addAuditLog('CREATION_DEPENSE', `Dépense de ${newExpense.amountFCFA} FCFA ajoutée (${newExpense.category})`, 'DEPENSE');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Dépense Enregistrée',
+      message: `Dépense de ${newExpense.amountFCFA.toLocaleString('fr-FR')} FCFA (${newExpense.category}) enregistrée.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertExpense(expenseData, newId).catch((err) =>
+        console.warn('Supabase expense insert notice:', err)
+      );
+    }
+  };
+
+  const deleteExpense = (expenseId: string) => {
+    const expToDelete = expenses.find((e) => e.id === expenseId);
+    if (!expToDelete) return;
+
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+    addAuditLog('SUPPRESSION_DEPENSE', `Suppression de la dépense ${expToDelete.description}`, 'DEPENSE');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteExpense(expenseId).catch((err) =>
+        console.warn('Supabase deleteExpense error:', err)
+      );
+    }
   };
 
   const createMaintenanceTicket = (ticketData: Omit<MaintenanceTicket, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -1398,6 +1772,99 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     setDocuments((prev) => [newDoc, ...prev]);
 
     addAuditLog('ENVOI_RELANCE', `Relance envoyée par ${channel} à ${arrear?.tenantName} (${arrear?.overdueAmountFCFA} FCFA en retard)`, 'RELANCE');
+
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      type: 'SYSTEM',
+      title: `Relance ${channel} Envoyée`,
+      message: `Relance envoyée avec succès à ${arrear?.tenantName} (${arrear?.overdueAmountFCFA.toLocaleString('fr-FR')} FCFA).`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+  };
+
+  const addVendor = (vendorData: Omit<Vendor, 'id' | 'agencyId'>) => {
+    const newId = generateUUID();
+    const newVendor: Vendor = {
+      ...vendorData,
+      id: newId,
+      agencyId: 'org-1',
+    };
+    setVendors((prev) => [newVendor, ...prev]);
+    addAuditLog('CREATION_PRESTATAIRE', `Ajout du prestataire ${newVendor.name} (${newVendor.trade})`, 'ORGANISATION');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Prestataire Ajouté',
+      message: `${newVendor.name} (${newVendor.trade}) ajouté au répertoire.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.insertVendor(vendorData, newId).catch((err) =>
+        console.warn('Supabase vendor insert notice:', err)
+      );
+    }
+  };
+
+  const deleteVendor = (vendorId: string) => {
+    const vendorToDelete = vendors.find((v) => v.id === vendorId);
+    if (!vendorToDelete) return;
+
+    setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+    addAuditLog('SUPPRESSION_PRESTATAIRE', `Suppression du prestataire ${vendorToDelete.name}`, 'ORGANISATION');
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.deleteVendor(vendorId).catch((err) =>
+        console.warn('Supabase deleteVendor error:', err)
+      );
+    }
+  };
+
+  const updateOrganization = (orgData: Partial<Organization>) => {
+    setOrganization((prev) => ({
+      ...prev,
+      ...orgData,
+    }));
+    addAuditLog('MAJ_ORGANISATION', `Mise à jour des informations de l'agence`, 'ORGANISATION');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Paramètres Agence Mis à Jour',
+      message: 'Les coordonnées et identifiants de l\'agence ont été enregistrés.',
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      SupabaseDbService.updateOrganization(orgData).catch((err) =>
+        console.warn('Supabase organization update notice:', err)
+      );
+    }
+  };
+
+  const updateSubscriptionPlan = (planId: string) => {
+    setOrganization((prev) => ({
+      ...prev,
+      subscriptionPlan: planId as any,
+    }));
+    addAuditLog('MAJ_ABONNEMENT', `Changement de forfait SaaS vers ${planId}`, 'ORGANISATION');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Abonnement Mis à Niveau',
+      message: `Votre agence est désormais sous le forfait ${planId}.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
   };
 
   return (
@@ -1423,19 +1890,33 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         auditLogs,
         saasPlans: SAAS_PLANS,
         recordPayment,
+        deletePayment,
         addProperty,
+        deleteProperty,
         addUnit,
+        deleteUnit,
         addTenant,
+        deleteTenant,
         addOwner,
+        deleteOwner,
         createLease,
+        deleteLease,
         addExpense,
+        deleteExpense,
         createMaintenanceTicket,
         updateTicketStatus,
         sendRelance,
+        addVendor,
+        deleteVendor,
+        updateOrganization,
+        updateSubscriptionPlan,
         searchQuery,
         setSearchQuery,
         selectedDocumentForPrint,
         setSelectedDocumentForPrint,
+        isMobileSidebarOpen,
+        setIsMobileSidebarOpen,
+        toggleMobileSidebar,
       }}
     >
       {children}

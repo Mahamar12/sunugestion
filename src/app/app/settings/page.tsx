@@ -5,7 +5,7 @@ import { useSunuGestion } from '@/context/SunuGestionContext';
 import { Settings, Building2, CreditCard, Bell, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { organization } = useSunuGestion();
+  const { organization, updateOrganization } = useSunuGestion();
   const [name, setName] = useState(organization.name);
   const [email, setEmail] = useState(organization.email);
   const [phone, setPhone] = useState(organization.phone);
@@ -17,8 +17,16 @@ export default function SettingsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    updateOrganization({
+      name,
+      email,
+      phone,
+      address,
+      ninea,
+      rccm,
+    });
     setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setTimeout(() => setSaved(false), 4000);
   };
 
   return (

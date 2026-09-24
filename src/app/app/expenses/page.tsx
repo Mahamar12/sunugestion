@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
-import { ExpenseCategory } from '@/types/sunugestion';
-import { Receipt, Plus, Search, Filter, X, Building2 } from 'lucide-react';
+import { ExpenseCategory, Expense } from '@/types/sunugestion';
+import { Receipt, Plus, Search, Filter, X, Building2, CheckCircle2, Trash2, AlertCircle } from 'lucide-react';
 
 export default function ExpensesPage() {
-  const { expenses, properties, addExpense } = useSunuGestion();
+  const { expenses, properties, addExpense, deleteExpense } = useSunuGestion();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
   // New Expense Form
   const [propertyId, setPropertyId] = useState(properties[0]?.id || '');
@@ -16,6 +17,7 @@ export default function ExpensesPage() {
   const [amount, setAmount] = useState(150000);
   const [vendorName, setVendorName] = useState('');
   const [description, setDescription] = useState('');
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   const filteredExpenses = expenses.filter(
     (e) =>
@@ -32,8 +34,8 @@ export default function ExpensesPage() {
 
     addExpense({
       agencyId: 'org-1',
-      propertyId: propertyId || 'prop-1',
-      propertyName: prop ? prop.name : 'Résidence Les Almadies',
+      propertyId: propertyId || properties[0]?.id || '',
+      propertyName: prop ? prop.name : 'Bien Immobilier',
       category,
       amountFCFA: Number(amount),
       date: new Date().toISOString().split('T')[0],
@@ -42,13 +44,30 @@ export default function ExpensesPage() {
     });
 
     setShowModal(false);
+    setNotificationMsg(`Dépense de ${Number(amount).toLocaleString('fr-FR')} FCFA (${category}) enregistrée avec succès.`);
+    setTimeout(() => setNotificationMsg(null), 4000);
     setDescription('');
   };
 
+  const confirmDeleteExpense = () => {
+    if (!expenseToDelete) return;
+    deleteExpense(expenseToDelete.id);
+    setNotificationMsg(`La dépense "${expenseToDelete.description}" a été supprimée.`);
+    setTimeout(() => setNotificationMsg(null), 4000);
+    setExpenseToDelete(null);
+  };
+
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
+      {notificationMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Dépenses Immobilières</h1>
           <p className="text-xs text-slate-500 mt-1">
@@ -57,8 +76,9 @@ export default function ExpensesPage() {
         </div>
 
         <button
+          type="button"
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-600/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-600/20 transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Saisir une Dépense</span>
@@ -99,35 +119,91 @@ export default function ExpensesPage() {
                 <th className="p-4">Fournisseur / Prestataire</th>
                 <th className="p-4">Description</th>
                 <th className="p-4">Montant FCFA</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredExpenses.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50">
-                  <td className="p-4 font-semibold text-slate-700">{e.date}</td>
-                  <td className="p-4 font-bold text-amber-800 uppercase text-[10px]">
-                    <span className="px-2 py-0.5 bg-amber-50 rounded border border-amber-200">{e.category}</span>
-                  </td>
-                  <td className="p-4 font-bold text-slate-900">{e.propertyName}</td>
-                  <td className="p-4 font-semibold text-slate-800">{e.vendorName}</td>
-                  <td className="p-4 text-slate-600">{e.description}</td>
-                  <td className="p-4 font-black text-rose-600 text-sm">
-                    -{e.amountFCFA.toLocaleString('fr-FR')} FCFA
+              {filteredExpenses.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">
+                    Aucune dépense trouvée.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredExpenses.map((e) => (
+                  <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-4 font-semibold text-slate-700">{e.date}</td>
+                    <td className="p-4 font-bold text-amber-800 uppercase text-[10px]">
+                      <span className="px-2 py-0.5 bg-amber-50 rounded border border-amber-200">{e.category}</span>
+                    </td>
+                    <td className="p-4 font-bold text-slate-900">{e.propertyName}</td>
+                    <td className="p-4 font-semibold text-slate-800">{e.vendorName}</td>
+                    <td className="p-4 text-slate-600">{e.description}</td>
+                    <td className="p-4 font-black text-rose-600 text-sm">
+                      -{e.amountFCFA.toLocaleString('fr-FR')} FCFA
+                    </td>
+                    <td className="p-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setExpenseToDelete(e)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center"
+                        title="Supprimer cette dépense"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {expenseToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600 mb-3">
+              <div className="p-2 bg-rose-50 rounded-xl">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">Supprimer cette dépense ?</h3>
+            </div>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer la dépense de <span className="font-bold text-slate-900">{expenseToDelete.amountFCFA.toLocaleString('fr-FR')} FCFA</span> ({expenseToDelete.description}) ?
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setExpenseToDelete(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteExpense}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
+              >
+                Confirmer la suppression
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Expense Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base">Enregistrer une Dépense</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -52,15 +52,13 @@ export default function AgencyDashboardPage() {
   const totalExpensesFCFA = expenses.reduce((acc, e) => acc + e.amountFCFA, 0);
   const netRevenueFCFA = collectedRentsFCFA - totalExpensesFCFA;
 
-  const urgentTickets = maintenanceTickets.filter((t) => t.priority === 'URGENCE' || t.priority === 'ELEVES');
-
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Tableau de Bord Agence</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Tableau de Bord Agence</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
               SunuGestion PRO
             </span>
@@ -70,7 +68,7 @@ export default function AgencyDashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <Link
             href="/app/payments"
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all"
@@ -202,19 +200,7 @@ export default function AgencyDashboardPage() {
           <p className="text-[10px] text-blue-600 font-semibold">Bénéfice après dépenses</p>
         </div>
 
-        {/* Card 9: Interventions Maintenance */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 hover:border-teal-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tickets Maintenance</span>
-            <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
-              <Wrench className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-slate-900">{maintenanceTickets.length}</div>
-          <p className="text-[10px] text-amber-600 font-bold">{urgentTickets.length} urgences signalées</p>
-        </div>
-
-        {/* Card 10: Loyers Attendus */}
+        {/* Card 9: Loyers Attendus */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 hover:border-indigo-300 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">Loyers Attendus</span>
@@ -366,6 +352,7 @@ export default function AgencyDashboardPage() {
                     +{p.amountFCFA.toLocaleString('fr-FR')} FCFA
                   </span>
                   <button
+                    type="button"
                     onClick={() =>
                       setSelectedDocumentForPrint({
                         id: p.receiptNumber,
@@ -377,7 +364,7 @@ export default function AgencyDashboardPage() {
                         date: p.date,
                       })
                     }
-                    className="text-[10px] text-blue-600 font-semibold hover:underline"
+                    className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer"
                   >
                     Voir Quittance PDF
                   </button>
@@ -422,27 +409,6 @@ export default function AgencyDashboardPage() {
                     Envoyer Relance
                   </Link>
                 </div>
-              </div>
-            ))}
-
-            {urgentTickets.map((t) => (
-              <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-amber-50/80 border border-amber-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
-                    <Wrench className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">{t.title}</p>
-                    <p className="text-[11px] text-slate-600">{t.propertyName} • Priorité: <span className="font-bold text-amber-800">{t.priority}</span></p>
-                  </div>
-                </div>
-
-                <Link
-                  href="/app/maintenance"
-                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold shadow-sm"
-                >
-                  Assigner
-                </Link>
               </div>
             ))}
           </div>

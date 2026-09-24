@@ -14,13 +14,17 @@ import {
   CreditCard,
   AlertTriangle,
   ChevronRight,
-  X
+  X,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function TenantsPage() {
-  const { tenants, units, addTenant } = useSunuGestion();
+  const { tenants, units, addTenant, deleteTenant } = useSunuGestion();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [tenantToDelete, setTenantToDelete] = useState<typeof tenants[0] | null>(null);
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   // New Tenant Form state
   const [firstName, setFirstName] = useState('');
@@ -28,7 +32,9 @@ export default function TenantsPage() {
   const [phone, setPhone] = useState('+221 77 ');
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
-  const [unitId, setUnitId] = useState(units[0]?.id || '');
+  const [unitId, setUnitId] = useState('type-appartement');
+  const [customUnitName, setCustomUnitName] = useState('Appartement');
+  const [customRent, setCustomRent] = useState<number>(400000);
   const [identityNum, setIdentityNum] = useState('');
 
   const filteredTenants = tenants.filter((t) => {
@@ -45,6 +51,43 @@ export default function TenantsPage() {
     e.preventDefault();
     const unit = units.find((u) => u.id === unitId);
 
+    let finalUnitNumber = customUnitName;
+    let finalPropertyName = 'Patrimoine Agence Dakar';
+    let finalPropertyId = 'prop-1';
+    let finalRent = customRent || 300000;
+
+    if (unit) {
+      finalUnitNumber = unit.unitNumber;
+      finalPropertyName = unit.propertyName;
+      finalPropertyId = unit.propertyId;
+      finalRent = unit.rentFCFA;
+    } else if (unitId === 'type-maison') {
+      finalUnitNumber = customUnitName || 'Maison';
+      finalPropertyName = 'Villa / Maison Dakar';
+      finalPropertyId = 'prop-2';
+      finalRent = customRent || 700000;
+    } else if (unitId === 'type-appartement') {
+      finalUnitNumber = customUnitName || 'Appartement';
+      finalPropertyName = 'Résidence Les Almadies';
+      finalPropertyId = 'prop-1';
+      finalRent = customRent || 400000;
+    } else if (unitId === 'type-studio') {
+      finalUnitNumber = customUnitName || 'Studio';
+      finalPropertyName = 'Immeuble Liberté 6 Extension';
+      finalPropertyId = 'prop-3';
+      finalRent = customRent || 200000;
+    } else if (unitId === 'type-magasin') {
+      finalUnitNumber = customUnitName || 'Magasin';
+      finalPropertyName = 'Espace Commercial Plateau';
+      finalPropertyId = 'prop-4';
+      finalRent = customRent || 350000;
+    } else if (unitId === 'type-bureau') {
+      finalUnitNumber = customUnitName || 'Bureau';
+      finalPropertyName = 'Espace Commercial Plateau';
+      finalPropertyId = 'prop-4';
+      finalRent = customRent || 500000;
+    }
+
     addTenant({
       agencyId: 'org-1',
       firstName,
@@ -52,17 +95,17 @@ export default function TenantsPage() {
       phone,
       whatsapp: phone,
       email,
-      address: unit ? `${unit.propertyName}, Dakar` : 'Dakar',
+      address: `${finalPropertyName}, Dakar`,
       profession,
       identityDocType: 'CNI',
       identityDocNumber: identityNum || '1 990 2026 00192',
       emergencyContact: 'Contact Famille',
       emergencyPhone: '+221 77 000 00 00',
-      unitId: unitId || 'unit-101',
-      unitNumber: unit ? unit.unitNumber : 'N/A',
-      propertyName: unit ? unit.propertyName : 'Propriété',
-      propertyId: unit ? unit.propertyId : 'prop-1',
-      rentFCFA: unit ? unit.rentFCFA : 300000,
+      unitId: unit ? unit.id : `unit-custom-${Date.now()}`,
+      unitNumber: finalUnitNumber,
+      propertyName: finalPropertyName,
+      propertyId: finalPropertyId,
+      rentFCFA: finalRent,
       entryDate: new Date().toISOString().split('T')[0],
       currentLeaseId: `lse-${Date.now()}`,
       status: 'ACTIF',
@@ -71,12 +114,21 @@ export default function TenantsPage() {
     setShowModal(false);
     setFirstName('');
     setLastName('');
+    setPhone('+221 77 ');
+    setEmail('');
+    setProfession('');
+    setIdentityNum('');
+    setUnitId('type-appartement');
+    setCustomUnitName('Appartement');
+    setCustomRent(400000);
+    setNotificationMsg(`Le locataire ${firstName} ${lastName} a été enregistré avec succès (${finalUnitNumber}).`);
+    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 bg-slate-50 min-h-screen">
       {/* Top Title & Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Locataires</h1>
           <p className="text-xs text-slate-500 mt-1">
@@ -180,13 +232,23 @@ export default function TenantsPage() {
                   </td>
 
                   <td className="p-4 text-right">
-                    <Link
-                      href={`/app/tenants/${t.id}`}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg transition-colors inline-flex items-center gap-1"
-                    >
-                      <span>Fiche Détaillée</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/app/tenants/${t.id}`}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg transition-colors inline-flex items-center gap-1 shadow-sm"
+                      >
+                        <span>Fiche Détaillée</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                      <button
+                        onClick={() => setTenantToDelete(t)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
+                        title={`Supprimer ${t.firstName} ${t.lastName}`}
+                        aria-label={`Supprimer ${t.firstName} ${t.lastName}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -257,14 +319,81 @@ export default function TenantsPage() {
                   <label className="block font-semibold text-slate-700 mb-1">Logement Affecté</label>
                   <select
                     value={unitId}
-                    onChange={(e) => setUnitId(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setUnitId(val);
+                      if (val === 'type-maison') {
+                        setCustomRent(700000);
+                        setCustomUnitName('Maison');
+                      } else if (val === 'type-appartement') {
+                        setCustomRent(400000);
+                        setCustomUnitName('Appartement');
+                      } else if (val === 'type-studio') {
+                        setCustomRent(200000);
+                        setCustomUnitName('Studio');
+                      } else if (val === 'type-magasin') {
+                        setCustomRent(350000);
+                        setCustomUnitName('Magasin');
+                      } else if (val === 'type-bureau') {
+                        setCustomRent(500000);
+                        setCustomUnitName('Bureau');
+                      } else {
+                        const u = units.find((x) => x.id === val);
+                        if (u) {
+                          setCustomRent(u.rentFCFA);
+                          setCustomUnitName(u.unitNumber);
+                        }
+                      }
+                    }}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
-                      </option>
-                    ))}
+                    <optgroup label="── Types de Logement ──">
+                      <option value="type-maison">🏠 Maison</option>
+                      <option value="type-appartement">🏢 Appartement</option>
+                      <option value="type-studio">🛋️ Studio</option>
+                      <option value="type-magasin">🏪 Magasin</option>
+                      <option value="type-bureau">💼 Bureau</option>
+                    </optgroup>
+
+                    <optgroup label="── Maisons Disponibles ──">
+                      {units.filter((u) => u.type === 'MAISON' || u.type === 'VILLA').map((u) => (
+                        <option key={u.id} value={u.id}>
+                          Maison : {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    <optgroup label="── Appartements Disponibles ──">
+                      {units.filter((u) => u.type === 'APPARTEMENT').map((u) => (
+                        <option key={u.id} value={u.id}>
+                          Appartement : {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    <optgroup label="── Studios Disponibles ──">
+                      {units.filter((u) => u.type === 'STUDIO').map((u) => (
+                        <option key={u.id} value={u.id}>
+                          Studio : {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    <optgroup label="── Magasins Disponibles ──">
+                      {units.filter((u) => u.type === 'MAGASIN' || u.type === 'BOUTIQUE').map((u) => (
+                        <option key={u.id} value={u.id}>
+                          Magasin : {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    <optgroup label="── Bureaux Disponibles ──">
+                      {units.filter((u) => u.type === 'BUREAU').map((u) => (
+                        <option key={u.id} value={u.id}>
+                          Bureau : {u.unitNumber} - {u.propertyName} ({u.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -277,6 +406,45 @@ export default function TenantsPage() {
                   />
                 </div>
               </div>
+
+              {unitId.startsWith('type-') && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-xs">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Précision / N° du bien (optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        unitId === 'type-maison'
+                          ? 'ex: Maison F4 Mermoz'
+                          : unitId === 'type-appartement'
+                          ? 'ex: Appt 2B 2ème Etage'
+                          : unitId === 'type-studio'
+                          ? 'ex: Studio 1A Meublé'
+                          : unitId === 'type-magasin'
+                          ? 'ex: Magasin N°12'
+                          : 'ex: Bureau 201'
+                      }
+                      value={customUnitName}
+                      onChange={(e) => setCustomUnitName(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Loyer Mensuel (FCFA)
+                    </label>
+                    <input
+                      type="number"
+                      value={customRent || ''}
+                      onChange={(e) => setCustomRent(Number(e.target.value))}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800"
+                      placeholder="Montant en FCFA"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">N° Pièce d'Identité (CNI/Passeport)</label>
@@ -306,6 +474,75 @@ export default function TenantsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {tenantToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 text-base">Supprimer ce locataire ?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Êtes-vous sûr de vouloir supprimer définitivement <strong className="text-slate-800">{tenantToDelete.firstName} {tenantToDelete.lastName}</strong> ?
+                </p>
+              </div>
+              <button
+                onClick={() => setTenantToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Conséquences de la suppression :</p>
+                <ul className="list-disc list-inside mt-1 text-[11px] text-amber-700 space-y-0.5">
+                  <li>Le logement <strong className="font-semibold">{tenantToDelete.unitNumber} ({tenantToDelete.propertyName})</strong> sera libéré et repassera au statut <strong>Disponible</strong>.</li>
+                  <li>Le dossier et le contrat en cours seront archivés/supprimés.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 text-xs">
+              <button
+                onClick={() => setTenantToDelete(null)}
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  const name = `${tenantToDelete.firstName} ${tenantToDelete.lastName}`;
+                  deleteTenant(tenantToDelete.id);
+                  setNotificationMsg(`Le locataire ${name} a été supprimé avec succès.`);
+                  setTenantToDelete(null);
+                  setTimeout(() => setNotificationMsg(null), 4000);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {notificationMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl border border-slate-800 flex items-center gap-3 text-xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="font-semibold">{notificationMsg}</span>
+          <button onClick={() => setNotificationMsg(null)} className="text-slate-400 hover:text-white ml-2">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

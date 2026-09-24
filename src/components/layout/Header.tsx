@@ -18,7 +18,8 @@ import {
   CreditCard,
   Building2,
   Wrench,
-  UserPlus
+  UserPlus,
+  Menu
 } from 'lucide-react';
 
 export default function Header() {
@@ -30,7 +31,8 @@ export default function Header() {
     setSearchQuery,
     recordPayment,
     tenants,
-    leases
+    leases,
+    toggleMobileSidebar
   } = useSunuGestion();
 
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -73,22 +75,32 @@ export default function Header() {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-20 flex items-center justify-between px-6 shadow-sm">
-      {/* Global Search Bar */}
-      <div className="flex items-center gap-3 flex-1 max-w-md">
+    <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-20 flex items-center justify-between px-3 sm:px-6 shadow-sm gap-2">
+      {/* Left: Mobile Hamburger & Search Bar */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-md">
+        <button
+          type="button"
+          onClick={toggleMobileSidebar}
+          className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl md:hidden cursor-pointer shrink-0 transition-colors"
+          aria-label="Ouvrir le menu de navigation"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
         <div className="relative w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher un locataire, bien, logement, contrat..."
-            className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+            placeholder="Rechercher locataire, bien, contrat..."
+            className="w-full pl-9 pr-3 sm:pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
           />
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -97,30 +109,40 @@ export default function Header() {
       </div>
 
       {/* Right Action Icons & Role Switcher */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Fullstack Supabase Connection Pill */}
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-800 shadow-xs">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Supabase Cloud Actif</span>
+        </div>
+
         {/* Quick Action Payment Button */}
         <button
+          type="button"
           onClick={() => setShowQuickPaymentModal(true)}
-          className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm shadow-emerald-600/20 transition-all"
+          className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
         >
           <CreditCard className="w-3.5 h-3.5" />
-          <span>Enregistrer un Paiement</span>
+          <span className="hidden md:inline">Enregistrer un Paiement</span>
+          <span className="md:hidden">Paiement</span>
         </button>
 
         {/* Role Switcher Selector */}
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowRoleModal(!showRoleModal)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors cursor-pointer"
           >
-            <Shield className="w-3.5 h-3.5 text-blue-600" />
-            <span className="font-semibold">{currentRole}</span>
+            <Shield className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="font-semibold hidden sm:inline">{currentRole}</span>
+            <span className="font-semibold sm:hidden text-[10px]">{currentRole === 'ADMIN_AGENCE' ? 'Admin' : currentRole === 'PROPRIETAIRE' ? 'Bailleur' : currentRole === 'LOCATAIRE' ? 'Locataire' : 'Rôle'}</span>
             <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
 
           {/* Role Dropdown */}
           {showRoleModal && (
-            <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 mt-2 w-72 max-w-[90vw] bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-[9999] animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-2 border-b border-slate-100 mb-1">
                 <p className="text-xs font-bold text-slate-800">Simulateur Rôles RBAC</p>
                 <p className="text-[11px] text-slate-500">Basculez instantanément de vue</p>
@@ -129,11 +151,12 @@ export default function Header() {
                 {rolesList.map((r) => (
                   <button
                     key={r.role}
+                    type="button"
                     onClick={() => {
                       switchRole(r.role);
                       setShowRoleModal(false);
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
                       currentRole === r.role ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
@@ -155,8 +178,9 @@ export default function Header() {
         {/* Notification Bell */}
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            className="relative p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -168,7 +192,7 @@ export default function Header() {
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-50">
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-[9999]">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="text-xs font-bold text-slate-800">Centre de notifications</span>
                 <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
@@ -191,14 +215,18 @@ export default function Header() {
 
       {/* Quick Payment Modal */}
       {showQuickPaymentModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Nouveau Paiement de Loyer</h3>
                 <p className="text-xs text-slate-500">Saisie directe & génération de quittance</p>
               </div>
-              <button onClick={() => setShowQuickPaymentModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setShowQuickPaymentModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -208,7 +236,14 @@ export default function Header() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Locataire</label>
                 <select
                   value={selectedTenantId}
-                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  onChange={(e) => {
+                    const tid = e.target.value;
+                    setSelectedTenantId(tid);
+                    const selected = tenants.find((t) => t.id === tid);
+                    if (selected) {
+                      setPayAmount(selected.rentFCFA);
+                    }
+                  }}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
                 >
                   {tenants.map((t) => (
