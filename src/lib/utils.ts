@@ -187,3 +187,86 @@ export function filterProperties(properties: Property[], filters: SearchFilters)
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 }
+
+export function numberToWordsFR(num: number): string {
+  if (!num || isNaN(num) || num <= 0) return 'Zéro Franc CFA';
+
+  const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+  const teens = ['dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+  const tens = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
+
+  function convertHundreds(n: number): string {
+    let result = '';
+    const h = Math.floor(n / 100);
+    const rest = n % 100;
+
+    if (h > 0) {
+      if (h === 1) {
+        result += 'cent';
+      } else {
+        result += units[h] + ' cent';
+        if (rest === 0) result += 's';
+      }
+      if (rest > 0) result += ' ';
+    }
+
+    if (rest > 0) {
+      if (rest < 10) {
+        result += units[rest];
+      } else if (rest < 20) {
+        result += teens[rest - 10];
+      } else {
+        const t = Math.floor(rest / 10);
+        const u = rest % 10;
+        if (t === 7) {
+          result += 'soixante-' + (u === 1 ? 'et-onze' : teens[u]);
+        } else if (t === 9) {
+          result += 'quatre-vingt-' + teens[u];
+        } else {
+          result += tens[t];
+          if (u === 1) {
+            result += ' et un';
+          } else if (u > 1) {
+            result += '-' + units[u];
+          } else if (t === 8 && u === 0) {
+            result += 's';
+          }
+        }
+      }
+    }
+
+    return result.trim();
+  }
+
+  const millions = Math.floor(num / 1000000);
+  const thousands = Math.floor((num % 1000000) / 1000);
+  const remainder = Math.floor(num % 1000);
+
+  let parts: string[] = [];
+
+  if (millions > 0) {
+    if (millions === 1) {
+      parts.push('un million');
+    } else {
+      parts.push(convertHundreds(millions) + ' millions');
+    }
+  }
+
+  if (thousands > 0) {
+    if (thousands === 1) {
+      parts.push('mille');
+    } else {
+      parts.push(convertHundreds(thousands) + ' mille');
+    }
+  }
+
+  if (remainder > 0) {
+    parts.push(convertHundreds(remainder));
+  }
+
+  const text = parts.join(' ').trim();
+  if (!text) return 'Zéro Franc CFA';
+  const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
+  return `${capitalized} Francs CFA`;
+}
+

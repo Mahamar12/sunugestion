@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import { UserRole } from '@/types/sunugestion';
 import {
@@ -19,7 +19,8 @@ import {
   Building2,
   Wrench,
   UserPlus,
-  Menu
+  Menu,
+  Calendar
 } from 'lucide-react';
 
 export default function Header() {
@@ -41,9 +42,31 @@ export default function Header() {
 
   // Quick payment form state
   const [selectedTenantId, setSelectedTenantId] = useState(tenants[0]?.id || '');
-  const [payAmount, setPayAmount] = useState(430000);
+  const [payAmount, setPayAmount] = useState<number>(tenants[0]?.rentFCFA || 0);
+  const [payPeriod, setPayPeriod] = useState('Septembre 2026');
+  const [payDueDate, setPayDueDate] = useState('2026-09-05');
+  const [payDate, setPayDate] = useState('2026-09-25');
   const [payMethod, setPayMethod] = useState<'WAVE' | 'ORANGE_MONEY' | 'VIREMENT_BANCAIRE' | 'ESPECES'>('WAVE');
   const [payRef, setPayRef] = useState('');
+
+  // Keep selected tenant & rent amount in sync with available tenants
+  useEffect(() => {
+    if (tenants.length > 0) {
+      if (!selectedTenantId || !tenants.some((t) => t.id === selectedTenantId)) {
+        setSelectedTenantId(tenants[0].id);
+        setPayAmount(tenants[0].rentFCFA);
+      }
+    }
+  }, [tenants, selectedTenantId]);
+
+  const handleOpenQuickPayment = () => {
+    const curTenant = tenants.find((t) => t.id === selectedTenantId) || tenants[0];
+    if (curTenant) {
+      setSelectedTenantId(curTenant.id);
+      setPayAmount(curTenant.rentFCFA);
+    }
+    setShowQuickPaymentModal(true);
+  };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -58,17 +81,20 @@ export default function Header() {
 
   const handleQuickPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const tenant = tenants.find((t) => t.id === selectedTenantId);
-    const lease = leases.find((l) => l.tenantId === selectedTenantId) || leases[0];
+    const tenant = tenants.find((t) => t.id === selectedTenantId) || tenants[0];
+    const lease = leases.find((l) => l.tenantId === tenant?.id) || leases[0];
     
     if (!tenant) return;
 
     recordPayment({
       tenantId: tenant.id,
       leaseId: lease?.id || 'lse-1',
-      amountFCFA: Number(payAmount),
+      amountFCFA: Number(payAmount) || tenant.rentFCFA,
       method: payMethod,
-      referenceNumber: payRef || `PAY-${Date.now()}`,
+      referenceNumber: payRef || `REC-${Date.now().toString().slice(-6)}`,
+      periodMonthYear: payPeriod,
+      dueDate: payDueDate,
+      paymentDate: payDate,
     });
 
     setShowQuickPaymentModal(false);
@@ -119,7 +145,7 @@ export default function Header() {
         {/* Quick Action Payment Button */}
         <button
           type="button"
-          onClick={() => setShowQuickPaymentModal(true)}
+          onClick={handleOpenQuickPayment}
           className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
         >
           <CreditCard className="w-3.5 h-3.5" />
@@ -216,24 +242,30 @@ export default function Header() {
       {/* Quick Payment Modal */}
       {showQuickPaymentModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Nouveau Paiement de Loyer</h3>
-                <p className="text-xs text-slate-500">Saisie directe & génération de quittance</p>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">Enregistrer un Reçu de Loyer</h3>
+                  <p className="text-xs text-slate-500">Quittance officielle avec échéance & mois de loyer</p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowQuickPaymentModal(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleQuickPaymentSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleQuickPaymentSubmit} className="mt-4 space-y-3.5 text-xs">
+              {/* Locataire */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Locataire</label>
+                <label className="block font-bold text-slate-700 mb-1">Locataire & Logement</label>
                 <select
                   value={selectedTenantId}
                   onChange={(e) => {
@@ -244,29 +276,104 @@ export default function Header() {
                       setPayAmount(selected.rentFCFA);
                     }
                   }}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
                 >
                   {tenants.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.firstName} {t.lastName} ({t.unitNumber} - {t.rentFCFA.toLocaleString('fr-FR')} FCFA)
+                      {t.firstName} {t.lastName} — {t.unitNumber} ({t.propertyName}) • {t.rentFCFA.toLocaleString('fr-FR')} FCFA
                     </option>
                   ))}
                 </select>
               </div>
 
+              {/* Mois / Période de loyer */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Montant Payé (FCFA)</label>
+                <label className="block font-bold text-slate-700 mb-1">Mois / Période de Loyer Concernée</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={payPeriod}
+                    onChange={(e) => setPayPeriod(e.target.value)}
+                    placeholder="ex: Septembre 2026"
+                    className="w-full p-2.5 pl-9 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                    required
+                  />
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                  {['Août 2026', 'Septembre 2026', 'Octobre 2026', 'Novembre 2026'].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPayPeriod(m)}
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
+                        payPeriod === m
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2 dates: Échéance & Paiement */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Date d'Échéance</label>
+                  <input
+                    type="date"
+                    value={payDueDate}
+                    onChange={(e) => setPayDueDate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400">Date limite fixée au bail</span>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Date de Paiement</label>
+                  <input
+                    type="date"
+                    value={payDate}
+                    onChange={(e) => setPayDate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400">Date effective d'encaissement</span>
+                </div>
+              </div>
+
+              {/* Montant Payé */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">Montant Payé (FCFA)</label>
+                  {selectedTenantId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sel = tenants.find((t) => t.id === selectedTenantId);
+                        if (sel) setPayAmount(sel.rentFCFA);
+                      }}
+                      className="text-[10px] font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Loyer exact: {tenants.find((t) => t.id === selectedTenantId)?.rentFCFA.toLocaleString('fr-FR')} FCFA
+                    </button>
+                  )}
+                </div>
                 <input
                   type="number"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+                  value={payAmount === 0 ? '' : payAmount}
+                  onChange={(e) => setPayAmount(e.target.value === '' ? 0 : Number(e.target.value))}
+                  placeholder="ex: 233 100"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-base text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
                   required
                 />
               </div>
 
+              {/* Mode de Paiement */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Mode de Paiement</label>
+                <label className="block font-bold text-slate-700 mb-1">Mode d'Encaissement</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'WAVE', label: 'Wave Money' },
@@ -278,9 +385,9 @@ export default function Header() {
                       key={m.id}
                       type="button"
                       onClick={() => setPayMethod(m.id as any)}
-                      className={`p-2 rounded-lg text-xs font-semibold border transition-all ${
+                      className={`p-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         payMethod === m.id
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                           : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -290,14 +397,15 @@ export default function Header() {
                 </div>
               </div>
 
+              {/* Référence */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Référence / Reçu</label>
+                <label className="block font-bold text-slate-700 mb-1">Référence / Numéro Transaction</label>
                 <input
                   type="text"
-                  placeholder="ex: WAVE-9823190 / Vir CBAO"
+                  placeholder="ex: WAVE-9823190 / Virement CBAO / Reçu N° 45"
                   value={payRef}
                   onChange={(e) => setPayRef(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
                 />
               </div>
 
@@ -305,15 +413,16 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={() => setShowQuickPaymentModal(false)}
-                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer transition-all flex items-center justify-center gap-1.5"
                 >
-                  Valider & Générer Quittance
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Valider & Générer Quittance</span>
                 </button>
               </div>
             </form>

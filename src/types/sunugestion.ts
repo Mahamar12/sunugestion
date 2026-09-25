@@ -218,6 +218,8 @@ export interface Payment {
   recordedBy: string;
   notes?: string;
   createdAt: string;
+  periodMonthYear?: string;
+  dueDate?: string;
 }
 
 export interface Arrear {

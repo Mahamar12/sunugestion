@@ -49,12 +49,15 @@ export interface SunuGestionContextType {
   // Mutators & Actions
   recordPayment: (data: {
     tenantId: string;
-    leaseId: string;
+    leaseId?: string;
     amountFCFA: number;
     method: PaymentMethod;
     referenceNumber: string;
+    periodMonthYear?: string;
+    paymentDate?: string;
+    dueDate?: string;
     notes?: string;
-  }) => void;
+  }) => AppDocument | void;
 
   addProperty: (property: Omit<Property, 'id' | 'createdAt'>) => void;
   updateProperty: (propertyId: string, updates: Partial<Property>) => void;
@@ -1360,16 +1363,34 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
 
   const recordPayment = (data: {
     tenantId: string;
-    leaseId: string;
+    leaseId?: string;
     amountFCFA: number;
     method: PaymentMethod;
     referenceNumber: string;
+    periodMonthYear?: string;
+    paymentDate?: string;
+    dueDate?: string;
     notes?: string;
-  }) => {
+  }): AppDocument => {
     const tenant = tenants.find((t) => t.id === data.tenantId);
-    const lease = leases.find((l) => l.id === data.leaseId);
-    const receiptNum = `QUITT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const lease = leases.find((l) => (data.leaseId ? l.id === data.leaseId : l.tenantId === data.tenantId));
+    const receiptNum = `QUITT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
     const newId = generateUUID();
+
+    const payDate = data.paymentDate || new Date().toISOString().split('T')[0];
+    const monthYear =
+      data.periodMonthYear ||
+      new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const formattedMonth = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
+    const dueDay = data.dueDate || `05 ${formattedMonth}`;
+
+    // Matching property & owner
+    const matchedProp = properties.find(
+      (p) =>
+        p.id === tenant?.propertyId ||
+        (p.name && tenant?.propertyName && p.name.trim().toLowerCase() === tenant?.propertyName.trim().toLowerCase())
+    );
+    const ownerName = matchedProp?.ownerName || 'Propriétaire Bailleur';
 
     const newPayment: Payment = {
       id: newId,
@@ -1377,16 +1398,18 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       receiptNumber: receiptNum,
       tenantId: data.tenantId,
       tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Locataire Inconnu',
-      leaseId: data.leaseId,
-      unitNumber: tenant?.unitNumber || 'N/A',
+      leaseId: data.leaseId || lease?.id || 'lse-1',
+      unitNumber: tenant?.unitNumber || 'Logement',
       propertyName: tenant?.propertyName || 'Propriété',
       amountFCFA: Number(data.amountFCFA),
-      date: new Date().toISOString().split('T')[0],
+      date: payDate,
       method: data.method,
       referenceNumber: data.referenceNumber,
       recordedBy: currentUser.name,
       notes: data.notes,
       createdAt: new Date().toLocaleString('fr-FR'),
+      periodMonthYear: formattedMonth,
+      dueDate: dueDay,
     };
 
     setPayments((prev) => [newPayment, ...prev]);
@@ -1425,36 +1448,70 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     // Clear from Arrears list if settled
     setArrears((prev) => prev.filter((a) => a.tenantId !== data.tenantId));
 
-    // Generate Quittance Document
+    // Generate Quittance Document with Complete & Professional Metadata
     const newDoc: AppDocument = {
-      id: generateUUID(),
-      title: `Quittance de Loyer - ${receiptNum} - ${tenant?.firstName} ${tenant?.lastName}`,
+      id: receiptNum,
+      title: `Quittance de Loyer • ${formattedMonth} • ${tenant?.firstName} ${tenant?.lastName}`,
       category: 'QUITTANCE',
-      tenantName: `${tenant?.firstName} ${tenant?.lastName}`,
-      propertyName: tenant?.propertyName,
+      tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : 'Locataire',
+      propertyName: tenant?.propertyName || 'Bien Immobilier',
+      ownerName: ownerName,
       amountFCFA: data.amountFCFA,
-      date: new Date().toISOString().split('T')[0],
+      date: payDate,
+      metadata: {
+        receiptNumber: receiptNum,
+        periodMonthYear: formattedMonth,
+        paymentDate: payDate,
+        dueDate: dueDay,
+        method: data.method,
+        referenceNumber: data.referenceNumber,
+        unitNumber: tenant?.unitNumber || 'Logement',
+        propertyName: tenant?.propertyName || 'Bien Immobilier',
+        ownerName: ownerName,
+        tenantPhone: tenant?.phone || '',
+        tenantCni: tenant?.identityDocNumber || '',
+        rentFCFA: data.amountFCFA,
+        chargesFCFA: 0,
+        status: 'ACQUITTE',
+      },
     };
     setDocuments((prev) => [newDoc, ...prev]);
+
+    // Automatically display the professional receipt immediately for print/download/share
+    setSelectedDocumentForPrint(newDoc);
 
     // Push notification
     const notif: NotificationItem = {
       id: generateUUID(),
       type: 'PAYMENT',
       title: 'Paiement Enregistré avec Succès',
-      message: `Quittance ${receiptNum} générée pour ${tenant?.firstName} ${tenant?.lastName} (${data.amountFCFA.toLocaleString('fr-FR')} FCFA via ${data.method}).`,
+      message: `Quittance ${receiptNum} (${formattedMonth}) générée pour ${tenant?.firstName} ${tenant?.lastName} (${data.amountFCFA.toLocaleString('fr-FR')} FCFA via ${data.method}).`,
       date: new Date().toLocaleTimeString('fr-FR'),
       read: false,
     };
     setNotifications((prev) => [notif, ...prev]);
 
-    addAuditLog('ENREGISTREMENT_PAIEMENT', `Enregistrement du paiement ${data.amountFCFA} FCFA (${data.method}) ref: ${data.referenceNumber}`, 'PAIEMENT');
+    addAuditLog(
+      'ENREGISTREMENT_PAIEMENT',
+      `Paiement loyer ${formattedMonth} : ${data.amountFCFA} FCFA (${data.method}) ref: ${data.referenceNumber}`,
+      'PAIEMENT'
+    );
 
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.insertPayment(data, newId).catch((err) =>
-        console.warn('Supabase payment sync notice:', err)
-      );
+      SupabaseDbService.insertPayment(
+        {
+          tenantId: data.tenantId,
+          leaseId: data.leaseId || lease?.id || 'lse-1',
+          amountFCFA: data.amountFCFA,
+          method: data.method,
+          referenceNumber: data.referenceNumber,
+          notes: data.notes,
+        },
+        newId
+      ).catch((err) => console.warn('Supabase payment sync notice:', err));
     }
+
+    return newDoc;
   };
 
   const deletePayment = (paymentId: string) => {

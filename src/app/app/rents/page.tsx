@@ -36,6 +36,8 @@ export default function RentSchedulesPage() {
       amountFCFA: selectedSchedule.remainingFCFA,
       method: payMethod,
       referenceNumber: payRef || `PAY-ECH-${Date.now()}`,
+      periodMonthYear: selectedSchedule.periodMonthYear,
+      dueDate: selectedSchedule.dueDate,
     });
 
     const tenantName = selectedSchedule.tenantName;
