@@ -121,7 +121,16 @@ export default function ContractsPage() {
     let finalPropertyId = property?.id || 'prop-1';
     let finalUnitId = unit?.id || `unit-custom-${Date.now()}`;
 
-    if (isManualUnit) {
+    if (unitId.startsWith('prop-')) {
+      const pId = unitId.replace('prop-', '');
+      const prop = properties.find((p) => p.id === pId);
+      if (prop) {
+        finalPropertyId = prop.id;
+        finalPropertyName = prop.name;
+        finalUnitNumber = prop.type === 'VILLA' || prop.type === 'MAISON' ? 'Villa' : 'Logement principal';
+        finalUnitId = `unit-${prop.id}`;
+      }
+    } else if (isManualUnit) {
       finalUnitNumber = manualUnitNumber.trim() || 'Logement personnalisé';
       finalPropertyName = manualPropertyName.trim() || 'Patrimoine Immo Dakar';
       finalPropertyId = 'prop-custom';
@@ -427,6 +436,14 @@ export default function ContractsPage() {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="MANUAL">✏️ Saisie manuelle (saisir librement...)</option>
+                    <optgroup label="🏢 Tous les Biens Immobiliers">
+                      {properties.map((p) => (
+                        <option key={`prop-${p.id}`} value={`prop-${p.id}`}>
+                          {p.type === 'VILLA' || p.type === 'MAISON' ? '🏡 ' : '🏢 '}
+                          {p.name} — {p.neighborhood} ({p.type})
+                        </option>
+                      ))}
+                    </optgroup>
                     <optgroup label="── Logements existants ──">
                       {units.map((u) => (
                         <option key={u.id} value={u.id}>

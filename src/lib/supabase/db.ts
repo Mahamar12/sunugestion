@@ -691,6 +691,39 @@ export const SupabaseDbService = {
     }
   },
 
+  async updateTenant(tenantId: string, updates: Partial<Tenant>): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      const payload: any = {};
+      if (updates.firstName !== undefined) payload.first_name = updates.firstName;
+      if (updates.lastName !== undefined) payload.last_name = updates.lastName;
+      if (updates.email !== undefined) payload.email = updates.email;
+      if (updates.phone !== undefined) payload.phone = updates.phone;
+      if (updates.profession !== undefined) {
+        payload.profession = updates.profession;
+        payload.employer = updates.profession;
+      }
+      if (updates.identityDocNumber !== undefined) payload.cni_number = updates.identityDocNumber;
+
+      if (Object.keys(payload).length > 0 && isUUID(tenantId)) {
+        await supabase.from('tenants').update(payload).eq('id', tenantId);
+      }
+
+      if (updates.rentFCFA || (updates.propertyId && isUUID(updates.propertyId))) {
+        const leasePayload: any = {};
+        if (updates.rentFCFA) leasePayload.rent_amount_fcfa = updates.rentFCFA;
+        if (updates.propertyId && isUUID(updates.propertyId)) leasePayload.property_id = updates.propertyId;
+        if (isUUID(tenantId)) {
+          await supabase.from('leases').update(leasePayload).eq('tenant_id', tenantId);
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase updateTenant error:', err);
+      return false;
+    }
+  },
+
   async deleteTenant(tenantId: string, tenantName?: string, tenantPhone?: string): Promise<boolean> {
     if (!supabase) return false;
     try {

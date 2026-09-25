@@ -62,6 +62,7 @@ export interface SunuGestionContextType {
   addUnit: (unit: Omit<Unit, 'id'>) => void;
   deleteUnit: (unitId: string) => void;
   addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => Promise<Tenant> | void;
+  updateTenant: (tenantId: string, updates: Partial<Tenant>) => Promise<void> | void;
   deleteTenant: (tenantId: string) => Promise<void> | void;
   addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => Promise<Owner> | void;
   updateOwner: (ownerId: string, updates: Partial<Owner>) => Promise<void> | void;
@@ -1681,10 +1682,73 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       return updated;
     });
 
+    // 2. Mise à jour ou création de l'unité liée
     if (tenantData.unitId) {
-      setUnits((prev) =>
-        prev.map((u) => (u.id === tenantData.unitId ? { ...u, status: 'OCCUPE' } : u))
-      );
+      setUnits((prev) => {
+        const exists = prev.some((u) => u.id === tenantData.unitId);
+        let updatedUnits: Unit[];
+        if (exists) {
+          updatedUnits = prev.map((u) =>
+            u.id === tenantData.unitId
+              ? {
+                  ...u,
+                  status: 'OCCUPE',
+                  tenantId: newTenant.id,
+                  tenantName: `${newTenant.firstName} ${newTenant.lastName}`,
+                }
+              : u
+          );
+        } else {
+          const newUnit: Unit = {
+            id: tenantData.unitId,
+            propertyId: tenantData.propertyId || '',
+            propertyName: tenantData.propertyName || '',
+            unitNumber: tenantData.unitNumber || 'Logement',
+            type: 'APPARTEMENT',
+            floor: '1er Étage',
+            surfaceM2: 70,
+            roomsCount: 3,
+            rentFCFA: tenantData.rentFCFA || 350000,
+            chargesFCFA: 20000,
+            status: 'OCCUPE',
+            tenantId: newTenant.id,
+            tenantName: `${newTenant.firstName} ${newTenant.lastName}`,
+            ownerId: '',
+            ownerName: '',
+          };
+          updatedUnits = [newUnit, ...prev];
+        }
+        try {
+          localStorage.setItem('sunu_units', JSON.stringify(updatedUnits));
+        } catch (e) {}
+        return updatedUnits;
+      });
+    }
+
+    // 3. Mise à jour du bien immobilier (nombre d'unités occupées)
+    if (tenantData.propertyId) {
+      setProperties((prev) => {
+        const updated = prev.map((p) => {
+          if (
+            p.id === tenantData.propertyId ||
+            (p.name &&
+              tenantData.propertyName &&
+              p.name.trim().toLowerCase() === tenantData.propertyName.trim().toLowerCase())
+          ) {
+            const newOccupied = p.occupiedUnits + 1;
+            return {
+              ...p,
+              occupiedUnits: newOccupied,
+              status: newOccupied >= p.totalUnits && p.totalUnits > 0 ? ('OCCUPE' as const) : p.status,
+            };
+          }
+          return p;
+        });
+        try {
+          localStorage.setItem('sunu_properties', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
     }
 
     addAuditLog(
@@ -1693,7 +1757,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       'LOCATAIRE'
     );
 
-    // 2. Persistance dans Supabase Cloud
+    // 4. Persistance dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
       try {
         const remoteId = await SupabaseDbService.insertTenant(newTenant, newId);
@@ -1713,6 +1777,52 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
 
     return newTenant;
+  };
+
+  const updateTenant = async (tenantId: string, updates: Partial<Tenant>): Promise<void> => {
+    setTenants((prev) => {
+      const updated = prev.map((t) => (t.id === tenantId ? { ...t, ...updates } : t));
+      try {
+        localStorage.setItem('sunu_tenants', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (updates.unitNumber || updates.propertyName || updates.rentFCFA || updates.propertyId) {
+      setUnits((prev) => {
+        const updated = prev.map((u) => {
+          if (u.tenantId === tenantId) {
+            return {
+              ...u,
+              unitNumber: updates.unitNumber || u.unitNumber,
+              propertyName: updates.propertyName || u.propertyName,
+              propertyId: updates.propertyId || u.propertyId,
+              rentFCFA: updates.rentFCFA || u.rentFCFA,
+              tenantName: updates.firstName || updates.lastName ? `${updates.firstName || ''} ${updates.lastName || ''}`.trim() : u.tenantName,
+            };
+          }
+          return u;
+        });
+        try {
+          localStorage.setItem('sunu_units', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+    }
+
+    addAuditLog(
+      'MODIFICATION_LOCATAIRE',
+      `Modification du locataire ${updates.firstName || ''} ${updates.lastName || ''}`,
+      'LOCATAIRE'
+    );
+
+    if (SupabaseDbService.isConfigured()) {
+      try {
+        await SupabaseDbService.updateTenant(tenantId, updates);
+      } catch (err) {
+        console.warn('Supabase tenant update notice:', err);
+      }
+    }
   };
 
   const deleteTenant = async (tenantId: string): Promise<void> => {
@@ -2312,6 +2422,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         addUnit,
         deleteUnit,
         addTenant,
+        updateTenant,
         deleteTenant,
         addOwner,
         updateOwner,
