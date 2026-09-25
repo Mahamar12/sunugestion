@@ -12,6 +12,7 @@ import {
   DollarSign,
   FileBox,
   Trash2,
+  Pencil,
   AlertTriangle,
   CheckCircle2,
   X,
@@ -26,6 +27,7 @@ export default function OwnersPage() {
     leases,
     expenses,
     addOwner,
+    updateOwner,
     deleteOwner,
     updateProperty,
     setSelectedDocumentForPrint
@@ -47,6 +49,74 @@ export default function OwnersPage() {
   const [bankAccount, setBankAccount] = useState('');
   const [commissionRate, setCommissionRate] = useState(8);
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
+
+  // Edit Owner State & Form
+  const [ownerToEdit, setOwnerToEdit] = useState<typeof owners[0] | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('Dakar');
+  const [editBankAccount, setEditBankAccount] = useState('');
+  const [editCommissionRate, setEditCommissionRate] = useState(8);
+  const [editIdentityDoc, setEditIdentityDoc] = useState('');
+  const [editSelectedPropertyId, setEditSelectedPropertyId] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEditModal = (owner: typeof owners[0]) => {
+    setOwnerToEdit(owner);
+    setEditFirstName(owner.firstName || '');
+    setEditLastName(owner.lastName || '');
+    setEditPhone(owner.phone || '+221 77 ');
+    setEditEmail(owner.email || '');
+    setEditAddress(owner.address || 'Dakar');
+    setEditBankAccount(owner.bankAccount || '');
+    setEditCommissionRate(owner.commissionRatePercent ?? 8);
+    setEditIdentityDoc(owner.identityDocNumber || '');
+
+    const attachedProp = properties.find((p) => p.ownerId === owner.id);
+    setEditSelectedPropertyId(attachedProp ? attachedProp.id : '');
+  };
+
+  const handleUpdateOwner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownerToEdit) return;
+    if (!editFirstName.trim() || !editLastName.trim()) return;
+
+    setIsUpdating(true);
+    try {
+      const updatedFields = {
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+        phone: editPhone.trim(),
+        whatsapp: editPhone.trim(),
+        email: editEmail.trim(),
+        address: editAddress.trim(),
+        bankAccount: editBankAccount.trim(),
+        commissionRatePercent: Number(editCommissionRate) || 8,
+        identityDocNumber: editIdentityDoc.trim(),
+      };
+
+      await updateOwner(ownerToEdit.id, updatedFields);
+
+      if (editSelectedPropertyId) {
+        updateProperty(editSelectedPropertyId, {
+          ownerId: ownerToEdit.id,
+          ownerName: `${editFirstName.trim()} ${editLastName.trim()}`,
+        });
+      }
+
+      setOwnerToEdit(null);
+      setNotificationMsg(`Le propriétaire ${editFirstName.trim()} ${editLastName.trim()} a été mis à jour avec succès.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } catch (err) {
+      console.error('Error updating owner:', err);
+      setNotificationMsg(`Erreur lors de la mise à jour du propriétaire.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const filteredOwners = owners.filter((o) => {
     const fullName = `${o.firstName || ''} ${o.lastName || ''}`.toLowerCase();
@@ -231,6 +301,14 @@ export default function OwnersPage() {
                       </span>
                       <button
                         type="button"
+                        onClick={() => handleOpenEditModal(o)}
+                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        title="Modifier ce propriétaire"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setOwnerToDelete(o)}
                         className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Supprimer ce propriétaire"
@@ -304,23 +382,34 @@ export default function OwnersPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedDocumentForPrint({
-                      id: `statement-${o.id}`,
-                      title: `Rapport Mensuel Propriétaire - ${o.firstName} ${o.lastName}`,
-                      category: 'RAPPORT_PROPRIETAIRE',
-                      ownerName: `${o.firstName} ${o.lastName}`,
-                      amountFCFA: netPayout,
-                      date: new Date().toISOString().split('T')[0],
-                    })
-                  }
-                  className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-                >
-                  <FileBox className="w-3.5 h-3.5" />
-                  <span>Générer Rapport Propriétaire PDF</span>
-                </button>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(o)}
+                    className="py-2 px-3 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    title="Modifier les coordonnées et informations"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Modifier</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedDocumentForPrint({
+                        id: `statement-${o.id}`,
+                        title: `Rapport Mensuel Propriétaire - ${o.firstName} ${o.lastName}`,
+                        category: 'RAPPORT_PROPRIETAIRE',
+                        ownerName: `${o.firstName} ${o.lastName}`,
+                        amountFCFA: netPayout,
+                        date: new Date().toISOString().split('T')[0],
+                      })
+                    }
+                    className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <FileBox className="w-3.5 h-3.5" />
+                    <span>Rapport PDF</span>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -469,6 +558,163 @@ export default function OwnersPage() {
                     <>
                       <UserCheck className="w-4 h-4" />
                       <span>Enregistrer Propriétaire</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Owner Modal */}
+      {ownerToEdit && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-slate-900 text-base">Modifier le Propriétaire</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOwnerToEdit(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateOwner} className="mt-4 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Prénom *</label>
+                  <input
+                    type="text"
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nom *</label>
+                  <input
+                    type="text"
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Téléphone / WhatsApp *</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Rattacher un Bien</label>
+                  <select
+                    value={editSelectedPropertyId}
+                    onChange={(e) => setEditSelectedPropertyId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer text-xs"
+                  >
+                    <option value="">Aucun bien pour l'instant</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.neighborhood || p.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Commission Agence (%)</label>
+                  <input
+                    type="number"
+                    value={editCommissionRate}
+                    onChange={(e) => setEditCommissionRate(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Compte Bancaire (RIB / Wave)</label>
+                  <input
+                    type="text"
+                    value={editBankAccount}
+                    onChange={(e) => setEditBankAccount(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Adresse / Ville</label>
+                  <input
+                    type="text"
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Numéro CNI / Passeport</label>
+                <input
+                  type="text"
+                  placeholder="ex: 1 890 1980 00123"
+                  value={editIdentityDoc}
+                  onChange={(e) => setEditIdentityDoc(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOwnerToEdit(null)}
+                  className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Enregistrer les modifications</span>
                     </>
                   )}
                 </button>

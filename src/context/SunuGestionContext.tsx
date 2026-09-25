@@ -64,6 +64,7 @@ export interface SunuGestionContextType {
   addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => Promise<Tenant> | void;
   deleteTenant: (tenantId: string) => Promise<void> | void;
   addOwner: (owner: Omit<Owner, 'id' | 'createdAt'> & Partial<Pick<Owner, 'propertiesCount' | 'totalMonthlyRevenueFCFA'>>) => Promise<Owner> | void;
+  updateOwner: (ownerId: string, updates: Partial<Owner>) => Promise<void> | void;
   deleteOwner: (ownerId: string) => Promise<void> | void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
   deleteLease: (leaseId: string) => void;
@@ -1748,6 +1749,38 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  const updateOwner = async (ownerId: string, updates: Partial<Owner>): Promise<void> => {
+    setOwners((prev) => {
+      const updated = prev.map((o) => (o.id === ownerId ? { ...o, ...updates } : o));
+      try {
+        localStorage.setItem('sunu_owners', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    const target = owners.find((o) => o.id === ownerId);
+    const fullName = `${updates.firstName || target?.firstName || ''} ${updates.lastName || target?.lastName || ''}`.trim();
+    addAuditLog('MODIFICATION_PROPRIETAIRE', `Mise à jour des informations du bailleur ${fullName}`, 'PROPRIETAIRE');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Propriétaire mis à jour',
+      message: `Le bailleur ${fullName} a été mis à jour avec succès.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      try {
+        await SupabaseDbService.updateOwner(ownerId, updates);
+      } catch (err) {
+        console.warn('Supabase updateOwner notice:', err);
+      }
+    }
+  };
+
   const createLease = (leaseData: Omit<Lease, 'id' | 'createdAt'>) => {
     const newId = generateUUID();
     const newLease: Lease = {
@@ -2058,6 +2091,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         addTenant,
         deleteTenant,
         addOwner,
+        updateOwner,
         deleteOwner,
         createLease,
         deleteLease,

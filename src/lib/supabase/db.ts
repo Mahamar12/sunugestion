@@ -212,6 +212,46 @@ export const SupabaseDbService = {
     }
   },
 
+  async updateOwner(ownerId: string, updates: Partial<Owner>): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      let targetId = ownerId;
+      if (!isUUID(targetId) && updates.phone) {
+        const cleanPhone = updates.phone.replace(/\s+/g, '');
+        const { data: byPhone } = await supabase
+          .from('owners')
+          .select('id')
+          .or(`phone.eq.${updates.phone},phone.eq.${cleanPhone}`)
+          .limit(1)
+          .single();
+        if (byPhone?.id) targetId = byPhone.id;
+      }
+
+      if (isUUID(targetId)) {
+        const payload: any = {};
+        if (updates.firstName !== undefined) payload.first_name = updates.firstName;
+        if (updates.lastName !== undefined) payload.last_name = updates.lastName;
+        if (updates.phone !== undefined) payload.phone = updates.phone;
+        if (updates.email !== undefined) payload.email = updates.email;
+        if (updates.address !== undefined) payload.address = updates.address;
+        if (updates.identityDocNumber !== undefined) payload.cni_number = updates.identityDocNumber;
+        if (updates.bankAccount !== undefined) payload.bank_rib = updates.bankAccount;
+        if (updates.commissionRatePercent !== undefined) payload.commission_rate = updates.commissionRatePercent;
+        if (updates.notes !== undefined) payload.notes = updates.notes;
+
+        const { error } = await supabase.from('owners').update(payload).eq('id', targetId);
+        if (error) {
+          console.error('Supabase updateOwner error:', error.message);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase updateOwner error:', err);
+      return false;
+    }
+  },
+
   // ==========================================
   // PROPERTIES (BIENS IMMOBILIERS)
   // ==========================================
