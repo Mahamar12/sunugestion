@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import { RentSchedule, PaymentMethod, RentScheduleStatus } from '@/types/sunugestion';
 import {
@@ -151,7 +151,43 @@ export default function RentSchedulesPage() {
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  const filteredSchedules = rentSchedules.filter((s) => {
+  // Liste des locataires fictifs à éliminer impérativement
+  const DUMMY_TENANT_NAMES = [
+    'mamadou diallo',
+    'aïssatou kane',
+    'aissatou kane',
+    'cheikh faye',
+    'fatou bintou seck',
+    'ibrahima ba',
+    'mariama sy',
+  ];
+
+  // Purger automatiquement toute donnée fictive résiduelle
+  useEffect(() => {
+    const hasDummy = rentSchedules.some((s) =>
+      DUMMY_TENANT_NAMES.includes((s.tenantName || '').toLowerCase().trim())
+    );
+    if (hasDummy) {
+      resetRentSchedulesToDefault();
+    }
+  }, [rentSchedules, resetRentSchedulesToDefault]);
+
+  // Conserver uniquement les échéances associées aux vrais locataires de l'application
+  const validTenantNames = new Set(
+    tenants.map((t) => `${t.firstName} ${t.lastName}`.trim().toLowerCase())
+  );
+  const validTenantIds = new Set(tenants.map((t) => t.id));
+
+  const realRentSchedules = rentSchedules.filter((s) => {
+    const name = (s.tenantName || '').trim().toLowerCase();
+    if (DUMMY_TENANT_NAMES.includes(name)) return false;
+    if (tenants.length > 0) {
+      return validTenantIds.has(s.tenantId) || validTenantNames.has(name);
+    }
+    return true;
+  });
+
+  const filteredSchedules = realRentSchedules.filter((s) => {
     const matchesSearch =
       s.tenantName.toLowerCase().includes(search.toLowerCase()) ||
       s.propertyName.toLowerCase().includes(search.toLowerCase()) ||
@@ -251,14 +287,14 @@ export default function RentSchedulesPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Échéances</p>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{rentSchedules.length}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">{rentSchedules.filter(s => s.status === 'PAYE').length} réglée(s) • {rentSchedules.filter(s => s.status !== 'PAYE').length} en cours</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{realRentSchedules.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{realRentSchedules.filter(s => s.status === 'PAYE').length} réglée(s) • {realRentSchedules.filter(s => s.status !== 'PAYE').length} en cours</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">À Encaisser (En Cours)</p>
           <p className="text-xl sm:text-2xl font-black text-rose-600 mt-1">
-            {rentSchedules.reduce((acc, s) => acc + (Number(s.remainingFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+            {realRentSchedules.reduce((acc, s) => acc + (Number(s.remainingFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
           </p>
           <p className="text-[10px] text-rose-600 font-semibold mt-0.5">Solde restant à percevoir</p>
         </div>
@@ -266,15 +302,15 @@ export default function RentSchedulesPage() {
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Déjà Encaissé</p>
           <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
-            {rentSchedules.reduce((acc, s) => acc + (Number(s.paidAmountFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+            {realRentSchedules.reduce((acc, s) => acc + (Number(s.paidAmountFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
           </p>
           <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Montant total réglé</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Échéances en Retard</p>
-          <p className={`text-xl sm:text-2xl font-black mt-1 ${rentSchedules.filter(s => s.status === 'EN_RETARD').length > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
-            {rentSchedules.filter(s => s.status === 'EN_RETARD').length} <span className="text-xs font-bold text-slate-400">({rentSchedules.filter(s => s.status === 'EN_RETARD').reduce((acc, s) => acc + (s.remainingFCFA || 0), 0).toLocaleString('fr-FR')} FCFA)</span>
+          <p className={`text-xl sm:text-2xl font-black mt-1 ${realRentSchedules.filter(s => s.status === 'EN_RETARD').length > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+            {realRentSchedules.filter(s => s.status === 'EN_RETARD').length} <span className="text-xs font-bold text-slate-400">({realRentSchedules.filter(s => s.status === 'EN_RETARD').reduce((acc, s) => acc + (s.remainingFCFA || 0), 0).toLocaleString('fr-FR')} FCFA)</span>
           </p>
           <p className="text-[10px] text-amber-600 font-semibold mt-0.5">Relances prioritaires</p>
         </div>
