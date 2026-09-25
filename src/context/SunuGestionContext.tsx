@@ -80,6 +80,9 @@ export interface SunuGestionContextType {
   deleteExpense: (expenseId: string) => void;
   deletePayment: (paymentId: string) => void;
   deleteRentSchedule: (scheduleId: string) => void;
+  addRentSchedule: (scheduleData: Omit<RentSchedule, 'id'>) => void;
+  generateMonthlySchedules: (monthYear?: string) => number;
+  resetRentSchedulesToDefault: () => void;
   createMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateTicketStatus: (ticketId: string, status: MaintenanceTicket['status'], vendorId?: string) => void;
   sendRelance: (arrearId: string, channel: 'SMS' | 'WHATSAPP' | 'EMAIL') => void;
@@ -698,13 +701,111 @@ const INITIAL_LEASES: Lease[] = [
 ];
 
 const INITIAL_RENT_SCHEDULES: RentSchedule[] = [
+  // Échéances en cours pour Septembre 2026 (Loyers du mois en cours à encaisser)
   {
-    id: 'sch-01',
+    id: 'sch-sep-01',
     leaseId: 'lse-1',
-    tenantId: 'ten-1',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f3',
     tenantName: 'Mamadou Diallo',
+    propertyName: 'Résidence Teranga Almadies',
+    unitNumber: 'Appartement 2B',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 400000,
+    chargesFCFA: 30000,
+    totalDueFCFA: 430000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 430000,
+    status: 'DUE',
+  },
+  {
+    id: 'sch-sep-02',
+    leaseId: 'lse-2',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f4',
+    tenantName: 'Aïssatou Kane',
+    propertyName: 'Immeuble Liberté 6 Extension',
+    unitNumber: 'Appartement 1A',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 450000,
+    chargesFCFA: 0,
+    totalDueFCFA: 450000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 450000,
+    status: 'DUE',
+  },
+  {
+    id: 'sch-sep-03',
+    leaseId: 'lse-3',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f5',
+    tenantName: 'Cheikh Faye',
+    propertyName: 'Villa Panoramique Mermoz',
+    unitNumber: 'Villa Complète Mermoz',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 1200000,
+    chargesFCFA: 100000,
+    totalDueFCFA: 1300000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 1300000,
+    status: 'DUE',
+  },
+  {
+    id: 'sch-sep-04',
+    leaseId: 'lse-4',
+    tenantId: 'ten-4',
+    tenantName: 'Fatou Bintou Seck',
+    propertyName: 'Espace Commercial Plateau',
+    unitNumber: 'Bureau 201',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 750000,
+    chargesFCFA: 50000,
+    totalDueFCFA: 800000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 800000,
+    status: 'DUE',
+  },
+  {
+    id: 'sch-sep-05',
+    leaseId: 'lse-5',
+    tenantId: 'ten-5',
+    tenantName: 'Ibrahima Ba',
     propertyName: 'Résidence Les Almadies',
-    unitNumber: 'Appt 1A - RDC',
+    unitNumber: 'Appt 3B - 3ème Etage',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 500000,
+    chargesFCFA: 40000,
+    totalDueFCFA: 540000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 540000,
+    status: 'DUE',
+  },
+  {
+    id: 'sch-sep-06',
+    leaseId: 'lse-6',
+    tenantId: 'ten-6',
+    tenantName: 'Mariama Sy',
+    propertyName: 'Espace Commercial Plateau',
+    unitNumber: 'Boutique B02',
+    periodMonthYear: 'Septembre 2026',
+    dueDate: '2026-09-05',
+    rentFCFA: 350000,
+    chargesFCFA: 25000,
+    totalDueFCFA: 375000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 375000,
+    status: 'DUE',
+  },
+  // Échéances d'Août 2026 (Historique récent & Retards)
+  {
+    id: 'sch-aou-01',
+    leaseId: 'lse-1',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f3',
+    tenantName: 'Mamadou Diallo',
+    propertyName: 'Résidence Teranga Almadies',
+    unitNumber: 'Appartement 2B',
     periodMonthYear: 'Août 2026',
     dueDate: '2026-08-05',
     rentFCFA: 400000,
@@ -715,28 +816,28 @@ const INITIAL_RENT_SCHEDULES: RentSchedule[] = [
     status: 'PAYE',
   },
   {
-    id: 'sch-02',
+    id: 'sch-aou-02',
     leaseId: 'lse-2',
-    tenantId: 'ten-2',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f4',
     tenantName: 'Aïssatou Kane',
     propertyName: 'Immeuble Liberté 6 Extension',
-    unitNumber: 'Studio 1A - 1er Etage',
+    unitNumber: 'Appartement 1A',
     periodMonthYear: 'Août 2026',
     dueDate: '2026-08-05',
-    rentFCFA: 200000,
-    chargesFCFA: 15000,
-    totalDueFCFA: 215000,
+    rentFCFA: 450000,
+    chargesFCFA: 0,
+    totalDueFCFA: 450000,
     paidAmountFCFA: 0,
-    remainingFCFA: 215000,
+    remainingFCFA: 450000,
     status: 'EN_RETARD',
   },
   {
-    id: 'sch-03',
+    id: 'sch-aou-03',
     leaseId: 'lse-3',
-    tenantId: 'ten-3',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f5',
     tenantName: 'Cheikh Faye',
     propertyName: 'Villa Panoramique Mermoz',
-    unitNumber: 'Villa Complète',
+    unitNumber: 'Villa Complète Mermoz',
     periodMonthYear: 'Août 2026',
     dueDate: '2026-08-05',
     rentFCFA: 1200000,
@@ -747,7 +848,23 @@ const INITIAL_RENT_SCHEDULES: RentSchedule[] = [
     status: 'PAYE',
   },
   {
-    id: 'sch-04',
+    id: 'sch-aou-04',
+    leaseId: 'lse-4',
+    tenantId: 'ten-4',
+    tenantName: 'Fatou Bintou Seck',
+    propertyName: 'Espace Commercial Plateau',
+    unitNumber: 'Bureau 201',
+    periodMonthYear: 'Août 2026',
+    dueDate: '2026-08-05',
+    rentFCFA: 750000,
+    chargesFCFA: 50000,
+    totalDueFCFA: 800000,
+    paidAmountFCFA: 800000,
+    remainingFCFA: 0,
+    status: 'PAYE',
+  },
+  {
+    id: 'sch-aou-05',
     leaseId: 'lse-5',
     tenantId: 'ten-5',
     tenantName: 'Ibrahima Ba',
@@ -762,20 +879,37 @@ const INITIAL_RENT_SCHEDULES: RentSchedule[] = [
     remainingFCFA: 540000,
     status: 'EN_RETARD',
   },
+  // Échéances d'Octobre 2026 (À venir)
   {
-    id: 'sch-05',
+    id: 'sch-oct-01',
     leaseId: 'lse-1',
-    tenantId: 'ten-1',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f3',
     tenantName: 'Mamadou Diallo',
-    propertyName: 'Résidence Les Almadies',
-    unitNumber: 'Appt 1A - RDC',
-    periodMonthYear: 'Septembre 2026',
-    dueDate: '2026-09-05',
+    propertyName: 'Résidence Teranga Almadies',
+    unitNumber: 'Appartement 2B',
+    periodMonthYear: 'Octobre 2026',
+    dueDate: '2026-10-05',
     rentFCFA: 400000,
     chargesFCFA: 30000,
     totalDueFCFA: 430000,
     paidAmountFCFA: 0,
     remainingFCFA: 430000,
+    status: 'A_VENIR',
+  },
+  {
+    id: 'sch-oct-02',
+    leaseId: 'lse-3',
+    tenantId: 'afd3365b-cd0e-4a8c-a531-140da3df29f5',
+    tenantName: 'Cheikh Faye',
+    propertyName: 'Villa Panoramique Mermoz',
+    unitNumber: 'Villa Complète Mermoz',
+    periodMonthYear: 'Octobre 2026',
+    dueDate: '2026-10-05',
+    rentFCFA: 1200000,
+    chargesFCFA: 100000,
+    totalDueFCFA: 1300000,
+    paidAmountFCFA: 0,
+    remainingFCFA: 1300000,
     status: 'A_VENIR',
   },
 ];
@@ -1236,10 +1370,24 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       }
       const cachedSchedules = localStorage.getItem('sunu_rent_schedules');
       if (cachedSchedules !== null) {
-        const parsedSchedules = JSON.parse(cachedSchedules);
-        if (Array.isArray(parsedSchedules)) {
-          setRentSchedules(parsedSchedules);
+        try {
+          const parsedSchedules = JSON.parse(cachedSchedules);
+          if (Array.isArray(parsedSchedules) && parsedSchedules.length > 2) {
+            setRentSchedules(parsedSchedules);
+          } else {
+            setRentSchedules(INITIAL_RENT_SCHEDULES);
+            try {
+              localStorage.setItem('sunu_rent_schedules', JSON.stringify(INITIAL_RENT_SCHEDULES));
+            } catch (e) {}
+          }
+        } catch (e) {
+          setRentSchedules(INITIAL_RENT_SCHEDULES);
         }
+      } else {
+        setRentSchedules(INITIAL_RENT_SCHEDULES);
+        try {
+          localStorage.setItem('sunu_rent_schedules', JSON.stringify(INITIAL_RENT_SCHEDULES));
+        } catch (e) {}
       }
       const cachedPayments = localStorage.getItem('sunu_payments');
       if (cachedPayments !== null) {
@@ -1602,6 +1750,98 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       read: false,
     };
     setNotifications((prev) => [notif, ...prev]);
+  };
+
+  const addRentSchedule = (scheduleData: Omit<RentSchedule, 'id'>) => {
+    const newId = `sch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newSchedule: RentSchedule = {
+      ...scheduleData,
+      id: newId,
+    };
+    setRentSchedules((prev) => {
+      const updated = [newSchedule, ...prev];
+      try {
+        localStorage.setItem('sunu_rent_schedules', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    addAuditLog(
+      'CREATION_ECHEANCE',
+      `Nouvelle échéance créée pour ${newSchedule.tenantName} (${newSchedule.periodMonthYear})`,
+      'LOYER'
+    );
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Nouvelle Échéance Créée',
+      message: `Échéance de ${newSchedule.periodMonthYear} pour ${newSchedule.tenantName} (${newSchedule.totalDueFCFA.toLocaleString('fr-FR')} FCFA).`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+  };
+
+  const generateMonthlySchedules = (monthYear: string = 'Septembre 2026'): number => {
+    let createdCount = 0;
+    const newSchedules: RentSchedule[] = [];
+    const activeLeases = leases.filter((l) => l.status === 'ACTIF' || l.status === 'EXPIRANT_BIENTOT');
+    const targetTenants = tenants.filter((t) => t.status === 'ACTIF' || t.status === 'EN_RETARD');
+
+    targetTenants.forEach((t) => {
+      const existing = rentSchedules.find(
+        (s) =>
+          (s.tenantId === t.id || s.tenantName.trim().toLowerCase() === `${t.firstName} ${t.lastName}`.trim().toLowerCase()) &&
+          s.periodMonthYear.trim().toLowerCase() === monthYear.trim().toLowerCase()
+      );
+      if (!existing) {
+        const lease = leases.find((l) => l.tenantId === t.id) || activeLeases[0];
+        const rent = t.rentFCFA || lease?.rentAmountFCFA || 350000;
+        const charges = lease?.chargesAmountFCFA || 0;
+        const total = rent + charges;
+        const dueDay = lease?.dueDayOfMonth || 5;
+        const formattedDueDate = `2026-09-${String(dueDay).padStart(2, '0')}`;
+
+        newSchedules.push({
+          id: `sch-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          leaseId: lease?.id || t.currentLeaseId || 'lse-1',
+          tenantId: t.id,
+          tenantName: `${t.firstName} ${t.lastName}`,
+          propertyName: t.propertyName || lease?.propertyName || 'Bien Immobilier',
+          unitNumber: t.unitNumber || lease?.unitNumber || 'Logement',
+          periodMonthYear: monthYear,
+          dueDate: formattedDueDate,
+          rentFCFA: rent,
+          chargesFCFA: charges,
+          totalDueFCFA: total,
+          paidAmountFCFA: 0,
+          remainingFCFA: total,
+          status: 'DUE',
+        });
+        createdCount++;
+      }
+    });
+
+    if (newSchedules.length > 0) {
+      setRentSchedules((prev) => {
+        const updated = [...newSchedules, ...prev];
+        try {
+          localStorage.setItem('sunu_rent_schedules', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+      addAuditLog('GENERATION_ECHEANCES', `${createdCount} échéances générées pour ${monthYear}`, 'LOYER');
+    }
+    return createdCount;
+  };
+
+  const resetRentSchedulesToDefault = () => {
+    setRentSchedules(INITIAL_RENT_SCHEDULES);
+    try {
+      localStorage.setItem('sunu_rent_schedules', JSON.stringify(INITIAL_RENT_SCHEDULES));
+    } catch (e) {}
+    addAuditLog('REINITIALISATION_ECHEANCES', 'Échéances réinitialisées avec succès', 'LOYER');
   };
 
   const addProperty = (propData: Omit<Property, 'id' | 'createdAt'>) => {
@@ -2550,6 +2790,9 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         recordPayment,
         deletePayment,
         deleteRentSchedule,
+        addRentSchedule,
+        generateMonthlySchedules,
+        resetRentSchedulesToDefault,
         addProperty,
         updateProperty,
         deleteProperty,

@@ -2,8 +2,25 @@
 
 import React, { useState } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
-import { RentSchedule, PaymentMethod } from '@/types/sunugestion';
-import { CalendarCheck, Search, Filter, CheckCircle2, Clock, AlertTriangle, CreditCard, X, Printer, Calendar, Trash2, AlertCircle } from 'lucide-react';
+import { RentSchedule, PaymentMethod, RentScheduleStatus } from '@/types/sunugestion';
+import {
+  CalendarCheck,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  CreditCard,
+  X,
+  Printer,
+  Calendar,
+  Trash2,
+  AlertCircle,
+  Plus,
+  Sparkles,
+  RotateCcw,
+  Building2
+} from 'lucide-react';
 
 function getDatesForPeriod(periodStr?: string) {
   if (!periodStr) return { start: '2026-09-01', end: '2026-09-30' };
@@ -28,11 +45,32 @@ function getDatesForPeriod(periodStr?: string) {
 }
 
 export default function RentSchedulesPage() {
-  const { rentSchedules, deleteRentSchedule, recordPayment, leases, tenants, setSelectedDocumentForPrint } = useSunuGestion();
+  const {
+    rentSchedules,
+    deleteRentSchedule,
+    addRentSchedule,
+    generateMonthlySchedules,
+    resetRentSchedulesToDefault,
+    recordPayment,
+    leases,
+    tenants,
+    setSelectedDocumentForPrint
+  } = useSunuGestion();
+
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterPeriod, setFilterPeriod] = useState<string>('ALL');
   const [selectedSchedule, setSelectedSchedule] = useState<RentSchedule | null>(null);
   const [scheduleToDelete, setScheduleToDelete] = useState<RentSchedule | null>(null);
+
+  // Modal Création d'une nouvelle échéance
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addTenantId, setAddTenantId] = useState('');
+  const [addPeriod, setAddPeriod] = useState('Septembre 2026');
+  const [addDueDate, setAddDueDate] = useState('2026-09-05');
+  const [addRent, setAddRent] = useState<number>(400000);
+  const [addCharges, setAddCharges] = useState<number>(30000);
+  const [addStatus, setAddStatus] = useState<RentScheduleStatus>('DUE');
 
   // Collect Payment Form State
   const [payAmount, setPayAmount] = useState<number>(0);
@@ -63,6 +101,56 @@ export default function RentSchedulesPage() {
     setPayPeriodEnd(dates.end);
   };
 
+  const handleAutoGenerate = () => {
+    const count = generateMonthlySchedules('Septembre 2026');
+    if (count > 0) {
+      setNotificationMsg(`${count} échéance${count > 1 ? 's' : ''} de loyer générée${count > 1 ? 's' : ''} avec succès pour Septembre 2026.`);
+    } else {
+      setNotificationMsg('Toutes les échéances de Septembre 2026 sont déjà prêtes et à jour pour vos contrats actifs.');
+    }
+    setTimeout(() => setNotificationMsg(null), 4500);
+  };
+
+  const handleSelectAddTenant = (tId: string) => {
+    setAddTenantId(tId);
+    const tenant = tenants.find((t) => t.id === tId);
+    const lease = leases.find((l) => l.tenantId === tId);
+    if (tenant) {
+      setAddRent(tenant.rentFCFA || lease?.rentAmountFCFA || 350000);
+      setAddCharges(lease?.chargesAmountFCFA || 0);
+    }
+  };
+
+  const handleCreateSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    const tenant = tenants.find((t) => t.id === addTenantId) || tenants[0];
+    if (!tenant) return;
+    const lease = leases.find((l) => l.tenantId === tenant.id);
+    const rentAmount = Number(addRent) || 0;
+    const chargesAmount = Number(addCharges) || 0;
+    const total = rentAmount + chargesAmount;
+
+    addRentSchedule({
+      leaseId: lease?.id || tenant.currentLeaseId || 'lse-1',
+      tenantId: tenant.id,
+      tenantName: `${tenant.firstName} ${tenant.lastName}`,
+      propertyName: tenant.propertyName || lease?.propertyName || 'Bien Immobilier',
+      unitNumber: tenant.unitNumber || lease?.unitNumber || 'Logement',
+      periodMonthYear: addPeriod,
+      dueDate: addDueDate,
+      rentFCFA: rentAmount,
+      chargesFCFA: chargesAmount,
+      totalDueFCFA: total,
+      paidAmountFCFA: 0,
+      remainingFCFA: total,
+      status: addStatus,
+    });
+
+    setShowAddModal(false);
+    setNotificationMsg(`Échéance de ${addPeriod} créée avec succès pour ${tenant.firstName} ${tenant.lastName}.`);
+    setTimeout(() => setNotificationMsg(null), 4000);
+  };
+
   const filteredSchedules = rentSchedules.filter((s) => {
     const matchesSearch =
       s.tenantName.toLowerCase().includes(search.toLowerCase()) ||
@@ -70,7 +158,8 @@ export default function RentSchedulesPage() {
       s.unitNumber.toLowerCase().includes(search.toLowerCase());
 
     const matchesStatus = filterStatus === 'ALL' || s.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesPeriod = filterPeriod === 'ALL' || s.periodMonthYear.toLowerCase() === filterPeriod.toLowerCase();
+    return matchesSearch && matchesStatus && matchesPeriod;
   });
 
   const handleCollectRent = (e: React.FormEvent) => {
@@ -109,19 +198,91 @@ export default function RentSchedulesPage() {
         </div>
       )}
 
-      {/* Title */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Title & Top Action Bar */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Gestion des Échéances de Loyers</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Génération automatique des échéances selon les termes des contrats de bail et encaissement direct.
+            Suivi des loyers en cours, échéances à encaisser et encaissement direct avec quittance instantanée.
           </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAutoGenerate}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            title="Générer automatiquement les échéances du mois en cours pour tous les baux actifs"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Générer Échéances du Mois</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (tenants.length > 0) {
+                handleSelectAddTenant(tenants[0].id);
+              }
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nouvelle Échéance</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              resetRentSchedulesToDefault();
+              setNotificationMsg('Toutes les échéances de loyers complètes ont été restaurées avec succès.');
+              setTimeout(() => setNotificationMsg(null), 4000);
+            }}
+            className="p-2.5 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+            title="Restaurer la liste complète des échéances par défaut"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Filter & Search */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
+      {/* 4 Financial KPI Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Échéances</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{rentSchedules.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{rentSchedules.filter(s => s.status === 'PAYE').length} réglée(s) • {rentSchedules.filter(s => s.status !== 'PAYE').length} en cours</p>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">À Encaisser (En Cours)</p>
+          <p className="text-xl sm:text-2xl font-black text-rose-600 mt-1">
+            {rentSchedules.reduce((acc, s) => acc + (Number(s.remainingFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+          </p>
+          <p className="text-[10px] text-rose-600 font-semibold mt-0.5">Solde restant à percevoir</p>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Déjà Encaissé</p>
+          <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
+            {rentSchedules.reduce((acc, s) => acc + (Number(s.paidAmountFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+          </p>
+          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Montant total réglé</p>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Échéances en Retard</p>
+          <p className={`text-xl sm:text-2xl font-black mt-1 ${rentSchedules.filter(s => s.status === 'EN_RETARD').length > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+            {rentSchedules.filter(s => s.status === 'EN_RETARD').length} <span className="text-xs font-bold text-slate-400">({rentSchedules.filter(s => s.status === 'EN_RETARD').reduce((acc, s) => acc + (s.remainingFCFA || 0), 0).toLocaleString('fr-FR')} FCFA)</span>
+          </p>
+          <p className="text-[10px] text-amber-600 font-semibold mt-0.5">Relances prioritaires</p>
+        </div>
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="relative w-full md:w-80">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -132,19 +293,36 @@ export default function RentSchedulesPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
-          <span className="font-semibold text-slate-500">Statut Échéance:</span>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="p-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-700"
-          >
-            <option value="ALL">Tous les statuts</option>
-            <option value="PAYE">Payé</option>
-            <option value="EN_RETARD">En Retard</option>
-            <option value="A_VENIR">À Venir</option>
-            <option value="PARTIEL">Partiellement Payé</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-2 text-xs w-full md:w-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-500">Mois:</span>
+            <select
+              value={filterPeriod}
+              onChange={(e) => setFilterPeriod(e.target.value)}
+              className="p-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-700"
+            >
+              <option value="ALL">Tous les mois</option>
+              <option value="Septembre 2026">Septembre 2026 (En cours)</option>
+              <option value="Août 2026">Août 2026</option>
+              <option value="Octobre 2026">Octobre 2026</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-500">Statut:</span>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="p-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-700"
+            >
+              <option value="ALL">Tous les statuts</option>
+              <option value="DUE">À Encaisser (Dû)</option>
+              <option value="EN_RETARD">En Retard</option>
+              <option value="PAYE">Payé</option>
+              <option value="A_VENIR">À Venir</option>
+              <option value="PARTIEL">Partiellement Payé</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -166,7 +344,46 @@ export default function RentSchedulesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSchedules.map((s) => (
+              {filteredSchedules.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-12 text-center">
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+                        <CalendarCheck className="w-6 h-6" />
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-sm">Aucune échéance trouvée</h3>
+                      <p className="text-xs text-slate-500">
+                        {search || filterStatus !== 'ALL' || filterPeriod !== 'ALL'
+                          ? 'Aucun résultat ne correspond à vos filtres actuels.'
+                          : 'Générez automatiquement les loyers en cours pour vos contrats ou créez une nouvelle échéance.'}
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleAutoGenerate}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Générer les échéances en cours</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resetRentSchedulesToDefault();
+                            setNotificationMsg('Les échéances complètes par défaut ont été restaurées.');
+                            setTimeout(() => setNotificationMsg(null), 4000);
+                          }}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Restaurer les échéances par défaut</span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredSchedules.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="p-4">
                     <p className="font-bold text-slate-900">{s.tenantName}</p>
@@ -254,7 +471,8 @@ export default function RentSchedulesPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+            )}
             </tbody>
           </table>
         </div>
@@ -493,6 +711,135 @@ export default function RentSchedulesPage() {
                 Supprimer
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Create New Rent Schedule Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  <CalendarCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Nouvelle Échéance de Loyer</h3>
+                  <p className="text-[11px] text-slate-500">Ajouter manuellement une échéance à percevoir</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSchedule} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">Locataire & Contrat concerné *</label>
+                <select
+                  value={addTenantId}
+                  onChange={(e) => handleSelectAddTenant(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+                  required
+                >
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.firstName} {t.lastName} — {t.propertyName} ({t.unitNumber})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Mois / Période *</label>
+                  <select
+                    value={addPeriod}
+                    onChange={(e) => setAddPeriod(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+                  >
+                    <option value="Septembre 2026">Septembre 2026</option>
+                    <option value="Octobre 2026">Octobre 2026</option>
+                    <option value="Novembre 2026">Novembre 2026</option>
+                    <option value="Décembre 2026">Décembre 2026</option>
+                    <option value="Août 2026">Août 2026</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Date d'Exigibilité *</label>
+                  <input
+                    type="date"
+                    value={addDueDate}
+                    onChange={(e) => setAddDueDate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Montant Loyer (FCFA) *</label>
+                  <input
+                    type="number"
+                    value={addRent}
+                    onChange={(e) => setAddRent(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Charges Mensuelles (FCFA)</label>
+                  <input
+                    type="number"
+                    value={addCharges}
+                    onChange={(e) => setAddCharges(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">Statut Initial</label>
+                <select
+                  value={addStatus}
+                  onChange={(e) => setAddStatus(e.target.value as RentScheduleStatus)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                >
+                  <option value="DUE">À Encaisser (Dû)</option>
+                  <option value="A_VENIR">À Venir</option>
+                  <option value="EN_RETARD">En Retard</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-blue-900">
+                <span className="font-bold">Total Exigible : </span>
+                <span className="font-black text-sm">{(Number(addRent) + Number(addCharges)).toLocaleString('fr-FR')} FCFA</span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Enregistrer l'Échéance</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
