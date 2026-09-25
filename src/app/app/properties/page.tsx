@@ -30,11 +30,12 @@ import {
   ExternalLink,
   UserPlus,
   Info,
-  ArrowRight
+  ArrowRight,
+  Pencil
 } from 'lucide-react';
 
 export default function PropertiesPage() {
-  const { properties, owners, units, tenants, leases, addProperty, deleteProperty } = useSunuGestion();
+  const { properties, owners, units, tenants, leases, addProperty, updateProperty, deleteProperty } = useSunuGestion();
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [search, setSearch] = useState('');
@@ -47,6 +48,21 @@ export default function PropertiesPage() {
   const [tenantModalTab, setTenantModalTab] = useState<'ALL' | 'OCCUPIED' | 'VACANT'>('ALL');
   const [tenantModalSearch, setTenantModalSearch] = useState('');
 
+  // Property edit modal state
+  const [propertyToEdit, setPropertyToEdit] = useState<Property | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<PropertyType>('IMMEUBLE');
+  const [editStatus, setEditStatus] = useState<PropertyStatus>('DISPONIBLE');
+  const [editAddress, setEditAddress] = useState('');
+  const [editNeighborhood, setEditNeighborhood] = useState('');
+  const [editCity, setEditCity] = useState('Dakar');
+  const [editOwnerId, setEditOwnerId] = useState('');
+  const [editValuation, setEditValuation] = useState(250000000);
+  const [editTotalUnits, setEditTotalUnits] = useState(4);
+  const [editDescription, setEditDescription] = useState('');
+  const [editImage, setEditImage] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   // New property form state
   const [name, setName] = useState('');
   const [type, setType] = useState<PropertyType>('IMMEUBLE');
@@ -57,6 +73,62 @@ export default function PropertiesPage() {
   const [valuation, setValuation] = useState(250000000);
   const [description, setDescription] = useState('');
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+
+  const handleOpenEditModal = (p: Property) => {
+    setPropertyToEdit(p);
+    setEditName(p.name);
+    setEditType(p.type);
+    setEditStatus(p.status);
+    setEditAddress(p.address);
+    setEditNeighborhood(p.neighborhood);
+    setEditCity(p.city || 'Dakar');
+    setEditOwnerId(p.ownerId || owners[0]?.id || '');
+    setEditValuation(p.valuationFCFA || 0);
+    setEditTotalUnits(p.totalUnits || 1);
+    setEditDescription(p.description || '');
+    setEditImage(p.image || '');
+  };
+
+  const handleSavePropertyEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!propertyToEdit) return;
+
+    setIsSavingEdit(true);
+    try {
+      const owner = owners.find((o) => o.id === editOwnerId);
+      const updates: Partial<Property> = {
+        name: editName.trim(),
+        type: editType,
+        status: editStatus,
+        address: editAddress.trim(),
+        neighborhood: editNeighborhood.trim(),
+        city: editCity.trim(),
+        ownerId: editOwnerId,
+        ownerName: owner ? `${owner.firstName} ${owner.lastName}` : propertyToEdit.ownerName,
+        valuationFCFA: Number(editValuation),
+        totalUnits: Number(editTotalUnits),
+        description: editDescription.trim(),
+        image: editImage.trim() || propertyToEdit.image,
+      };
+
+      updateProperty(propertyToEdit.id, updates);
+
+      if (selectedPropertyForTenants?.id === propertyToEdit.id) {
+        setSelectedPropertyForTenants({
+          ...selectedPropertyForTenants,
+          ...updates,
+        } as Property);
+      }
+
+      setNotificationMsg(`Le bien "${editName}" a été modifié avec succès.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+      setPropertyToEdit(null);
+    } catch (err) {
+      console.error('Error updating property:', err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const filteredProperties = properties.filter((p) => {
     const matchesSearch =
@@ -387,14 +459,25 @@ export default function PropertiesPage() {
                   >
                     Fiche détaillée <ChevronRight className="w-3.5 h-3.5" />
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setPropertyToDelete(p)}
-                    className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    title={`Supprimer ${p.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(p)}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-bold rounded-lg border border-blue-200/80 transition-colors cursor-pointer"
+                      title={`Modifier ${p.name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Modifier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPropertyToDelete(p)}
+                      className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title={`Supprimer ${p.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -528,6 +611,184 @@ export default function PropertiesPage() {
         </div>
       )}
 
+      {/* Edit Property Modal */}
+      {propertyToEdit && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-auto animate-in fade-in">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Modifier le Bien Immobilier</h3>
+                  <p className="text-[11px] text-slate-500">Mettre à jour les informations du bien</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPropertyToEdit(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePropertyEdit} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nom du bien</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Type de Bien</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as any)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="IMMEUBLE">Immeuble</option>
+                    <option value="VILLA">Villa</option>
+                    <option value="APPARTEMENT">Appartement</option>
+                    <option value="STUDIO">Studio</option>
+                    <option value="BOUTIQUE">Boutique</option>
+                    <option value="BUREAU">Bureau</option>
+                    <option value="LOCAL_COMMERCIAL">Local Commercial</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Statut</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="DISPONIBLE">Disponible</option>
+                    <option value="OCCUPE">Occupé</option>
+                    <option value="EN_MAINTENANCE">En maintenance</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Propriétaire (Bailleur)</label>
+                  <select
+                    value={editOwnerId}
+                    onChange={(e) => setEditOwnerId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {owners.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.firstName} {o.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Quartier (Dakar)</label>
+                  <input
+                    type="text"
+                    value={editNeighborhood}
+                    onChange={(e) => setEditNeighborhood(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Adresse complète</label>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Valeur estimée (FCFA)</label>
+                  <input
+                    type="number"
+                    value={editValuation}
+                    onChange={(e) => setEditValuation(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Nombre total de logements</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editTotalUnits}
+                    onChange={(e) => setEditTotalUnits(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">URL de l'image (optionnel)</label>
+                <input
+                  type="text"
+                  value={editImage}
+                  onChange={(e) => setEditImage(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Description / Notes</label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPropertyToEdit(null)}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <span>Enregistrer les modifications</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {propertyToDelete && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
@@ -641,14 +902,25 @@ export default function PropertiesPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedPropertyForTenants(null)}
-                className="p-2 text-slate-400 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition cursor-pointer"
-                title="Fermer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditModal(selectedPropertyForTenants)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  title="Modifier les informations de ce bien"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-blue-300" />
+                  <span>Modifier</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPropertyForTenants(null)}
+                  className="p-2 text-slate-400 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition cursor-pointer"
+                  title="Fermer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Quick KPI Summary Bar */}

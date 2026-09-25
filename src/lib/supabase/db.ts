@@ -375,20 +375,41 @@ export const SupabaseDbService = {
 
   async updateProperty(propertyId: string, updates: Partial<Property>): Promise<boolean> {
     if (!supabase) return false;
-    if (!isUUID(propertyId)) return true;
     try {
-      const payload: any = {};
-      if (updates.ownerId !== undefined) {
-        payload.owner_id = isUUID(updates.ownerId) ? updates.ownerId : null;
+      let targetId = propertyId;
+      if (!isUUID(targetId) && updates.name) {
+        const { data: byName } = await supabase
+          .from('properties')
+          .select('id')
+          .ilike('name', `%${updates.name.trim()}%`)
+          .limit(1)
+          .single();
+        if (byName?.id) targetId = byName.id;
       }
-      if (updates.name) payload.name = updates.name;
-      if (updates.type) payload.type = updates.type;
-      if (updates.totalUnits !== undefined) payload.total_units = updates.totalUnits;
-      if (updates.occupiedUnits !== undefined) payload.occupied_units = updates.occupiedUnits;
 
-      const { error } = await supabase.from('properties').update(payload).eq('id', propertyId);
-      if (error) console.error('Supabase updateProperty error:', error.message);
-      return !error;
+      if (isUUID(targetId)) {
+        const payload: any = {};
+        if (updates.ownerId !== undefined) {
+          payload.owner_id = isUUID(updates.ownerId) ? updates.ownerId : null;
+        }
+        if (updates.name) payload.name = updates.name;
+        if (updates.type) {
+          const allowedTypes = ['IMMEUBLE', 'APPARTEMENT', 'VILLA', 'COMMERCIAL', 'TERRAIN'];
+          payload.type = allowedTypes.includes(updates.type) ? updates.type : 'IMMEUBLE';
+        }
+        if (updates.address !== undefined) payload.address = updates.address;
+        if (updates.neighborhood !== undefined) payload.neighborhood = updates.neighborhood;
+        if (updates.city !== undefined) payload.city = updates.city;
+        if (updates.description !== undefined) payload.description = updates.description;
+        if (updates.image !== undefined) payload.image_url = updates.image;
+        if (updates.totalUnits !== undefined) payload.total_units = updates.totalUnits;
+        if (updates.occupiedUnits !== undefined) payload.occupied_units = updates.occupiedUnits;
+
+        const { error } = await supabase.from('properties').update(payload).eq('id', targetId);
+        if (error) console.error('Supabase updateProperty error:', error.message);
+        return !error;
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase updateProperty error:', err);
       return false;
