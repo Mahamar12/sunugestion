@@ -51,15 +51,30 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
       }
     })();
 
+  // Date formatter helper (e.g. 2026-09-01 -> 01/09/2026)
+  function formatDateFR(str?: string) {
+    if (!str) return '';
+    if (str.includes('/')) return str;
+    try {
+      const parts = str.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('fr-FR');
+      }
+    } catch (e) {}
+    return str;
+  }
+
   // Payment Date
   const paymentDate = metadata.paymentDate || doc.date || new Date().toISOString().split('T')[0];
 
-  // Due Date (Échéance)
-  const dueDate =
-    metadata.dueDate ||
-    (() => {
-      return `05 ${periodMonthYear}`;
-    })();
+  // Period Start and End Dates (Commençant le ... Finissant le ...)
+  const periodStartDate = metadata.periodStartDate || '2026-09-01';
+  const periodEndDate = metadata.periodEndDate || '2026-09-30';
+  const dueDate = metadata.dueDate || `Du ${formatDateFR(periodStartDate)} au ${formatDateFR(periodEndDate)}`;
 
   // Tenant & Property
   const tenantName = doc.tenantName || 'Locataire';
@@ -67,7 +82,7 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
   const propertyName = doc.propertyName || metadata.propertyName || 'Bien Immobilier Dakar';
   const unitNumber = metadata.unitNumber || 'Logement';
   const ownerName = doc.ownerName || metadata.ownerName || 'Propriétaire Bailleur';
-  const paymentMethod = metadata.method || 'WAVE';
+  const paymentMethod = metadata.method || metadata.paymentMethod || 'WAVE';
   const referenceNumber = metadata.referenceNumber || 'N/A';
   const amountFCFA = Number(doc.amountFCFA || 0);
 
@@ -82,7 +97,9 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
       ? `221${cleanPhone}`
       : '221770000000';
 
-    const msg = `*QUITTANCE DE LOYER OFFICIELLE*\nAgence : ${organization.name}\n\nBonjour M./Mme *${tenantName}*,\nNous confirmons la bonne réception de votre paiement de loyer pour :\n\n- *Période / Mois* : ${periodMonthYear}\n- *Bien / Logement* : ${propertyName} (${unitNumber})\n- *Montant réglé* : ${amountFCFA.toLocaleString('fr-FR')} FCFA\n- *Date de paiement* : ${paymentDate}\n- *N° Quittance* : ${receiptNum}\n- *Solde restant* : 0 FCFA (Entièrement soldé)\n\nMerci pour votre ponctualité !\n${organization.name} - ${organization.phone}`;
+    const methodText = paymentMethod === 'ESPECES' ? 'Espèces (Comptant)' : `${paymentMethod} (Réf : ${referenceNumber})`;
+
+    const msg = `*QUITTANCE DE LOYER OFFICIELLE*\nAgence : ${organization.name}\n\nBonjour M./Mme *${tenantName}*,\nNous confirmons la bonne réception de votre paiement de loyer pour :\n\n- *Période / Échéance* : Commençant le ${formatDateFR(periodStartDate)} — Finissant le ${formatDateFR(periodEndDate)}\n- *Mois* : ${periodMonthYear}\n- *Bien / Logement* : ${propertyName} (${unitNumber})\n- *Montant réglé* : ${amountFCFA.toLocaleString('fr-FR')} FCFA\n- *Mode de règlement* : ${methodText}\n- *Date de paiement* : ${formatDateFR(paymentDate)}\n- *N° Quittance* : ${receiptNum}\n- *Solde restant* : 0 FCFA (Entièrement soldé)\n\nMerci pour votre ponctualité !\n${organization.name} - ${organization.phone}`;
 
     window.open(`https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(msg)}`, '_blank');
   };
@@ -185,7 +202,7 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
                   </p>
                 </div>
 
-                {/* 3 Key Dates Banner: Month, Due Date, Payment Date */}
+                {/* 3 Key Dates Banner: Month, Due Dates Range, Payment Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl border border-blue-100">
                   <div className="space-y-1">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
@@ -195,18 +212,24 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
                       <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
                       <span>{periodMonthYear}</span>
                     </strong>
-                    <span className="text-[10px] text-slate-500 block">Terme échu</span>
+                    <span className="text-[10px] text-slate-500 block">Terme de location</span>
                   </div>
 
                   <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                      Date d'Échéance
+                      Date d'Échéance (Période)
                     </span>
-                    <strong className="text-sm font-black text-amber-900 flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>{dueDate}</span>
-                    </strong>
-                    <span className="text-[10px] text-slate-500 block">Exigibilité statutaire</span>
+                    <div className="text-xs space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-500 font-medium">Commençant le :</span>
+                        <strong className="font-extrabold text-slate-900">{formatDateFR(periodStartDate)}</strong>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-500 font-medium">Finissant le :</span>
+                        <strong className="font-extrabold text-slate-900">{formatDateFR(periodEndDate)}</strong>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-amber-700 font-semibold block">Période d'occupation couverte</span>
                   </div>
 
                   <div className="space-y-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3">
@@ -215,7 +238,7 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
                     </span>
                     <strong className="text-sm font-black text-emerald-800 flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{paymentDate}</span>
+                      <span>{formatDateFR(paymentDate)}</span>
                     </strong>
                     <span className="text-[10px] text-emerald-700 font-bold block">Encaissé avec succès</span>
                   </div>
@@ -289,8 +312,14 @@ export default function DocumentViewerModal({ document: doc, onClose }: Document
                           <strong className="text-emerald-950 font-black text-sm block">
                             TOTAL PAYÉ & ENCAISSÉ
                           </strong>
-                          <span className="text-[10px] text-emerald-800">
-                            Règlement par {paymentMethod} (Réf : {referenceNumber})
+                          <span className="text-[10px] text-emerald-800 font-medium">
+                            {paymentMethod === 'ESPECES' ? (
+                              <span>Règlement en Espèces (Paiement comptant en caisse • Sans référence)</span>
+                            ) : (
+                              <span>
+                                Règlement par {paymentMethod} {referenceNumber && referenceNumber !== 'N/A' && `(Réf : ${referenceNumber})`}
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className="p-3 text-right">

@@ -220,6 +220,8 @@ export interface Payment {
   createdAt: string;
   periodMonthYear?: string;
   dueDate?: string;
+  periodStartDate?: string;
+  periodEndDate?: string;
 }
 
 export interface Arrear {

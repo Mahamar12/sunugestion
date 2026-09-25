@@ -52,10 +52,12 @@ export interface SunuGestionContextType {
     leaseId?: string;
     amountFCFA: number;
     method: PaymentMethod;
-    referenceNumber: string;
+    referenceNumber?: string;
     periodMonthYear?: string;
     paymentDate?: string;
     dueDate?: string;
+    periodStartDate?: string;
+    periodEndDate?: string;
     notes?: string;
   }) => AppDocument | void;
 
@@ -1366,10 +1368,12 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     leaseId?: string;
     amountFCFA: number;
     method: PaymentMethod;
-    referenceNumber: string;
+    referenceNumber?: string;
     periodMonthYear?: string;
     paymentDate?: string;
     dueDate?: string;
+    periodStartDate?: string;
+    periodEndDate?: string;
     notes?: string;
   }): AppDocument => {
     const tenant = tenants.find((t) => t.id === data.tenantId);
@@ -1382,7 +1386,14 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       data.periodMonthYear ||
       new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
     const formattedMonth = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
-    const dueDay = data.dueDate || `05 ${formattedMonth}`;
+    
+    const pStart = data.periodStartDate || '2026-09-01';
+    const pEnd = data.periodEndDate || '2026-09-30';
+    const dueDay = data.dueDate || `Du ${pStart} au ${pEnd}`;
+
+    const refNum =
+      data.referenceNumber ||
+      (data.method === 'ESPECES' ? 'Paiement Espèces (Sans référence)' : `REC-${Date.now().toString().slice(-6)}`);
 
     // Matching property & owner
     const matchedProp = properties.find(
@@ -1404,12 +1415,14 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       amountFCFA: Number(data.amountFCFA),
       date: payDate,
       method: data.method,
-      referenceNumber: data.referenceNumber,
+      referenceNumber: refNum,
       recordedBy: currentUser.name,
       notes: data.notes,
       createdAt: new Date().toLocaleString('fr-FR'),
       periodMonthYear: formattedMonth,
       dueDate: dueDay,
+      periodStartDate: pStart,
+      periodEndDate: pEnd,
     };
 
     setPayments((prev) => [newPayment, ...prev]);
@@ -1463,8 +1476,10 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         periodMonthYear: formattedMonth,
         paymentDate: payDate,
         dueDate: dueDay,
+        periodStartDate: pStart,
+        periodEndDate: pEnd,
         method: data.method,
-        referenceNumber: data.referenceNumber,
+        referenceNumber: refNum,
         unitNumber: tenant?.unitNumber || 'Logement',
         propertyName: tenant?.propertyName || 'Bien Immobilier',
         ownerName: ownerName,
@@ -1504,7 +1519,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           leaseId: data.leaseId || lease?.id || 'lse-1',
           amountFCFA: data.amountFCFA,
           method: data.method,
-          referenceNumber: data.referenceNumber,
+          referenceNumber: refNum,
           notes: data.notes,
         },
         newId

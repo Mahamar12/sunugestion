@@ -44,10 +44,28 @@ export default function Header() {
   const [selectedTenantId, setSelectedTenantId] = useState(tenants[0]?.id || '');
   const [payAmount, setPayAmount] = useState<number>(tenants[0]?.rentFCFA || 0);
   const [payPeriod, setPayPeriod] = useState('Septembre 2026');
-  const [payDueDate, setPayDueDate] = useState('2026-09-05');
+  const [payPeriodStart, setPayPeriodStart] = useState('2026-09-01');
+  const [payPeriodEnd, setPayPeriodEnd] = useState('2026-09-30');
   const [payDate, setPayDate] = useState('2026-09-25');
   const [payMethod, setPayMethod] = useState<'WAVE' | 'ORANGE_MONEY' | 'VIREMENT_BANCAIRE' | 'ESPECES'>('WAVE');
   const [payRef, setPayRef] = useState('');
+
+  const handleSelectPeriod = (m: string) => {
+    setPayPeriod(m);
+    if (m === 'Août 2026') {
+      setPayPeriodStart('2026-08-01');
+      setPayPeriodEnd('2026-08-31');
+    } else if (m === 'Septembre 2026') {
+      setPayPeriodStart('2026-09-01');
+      setPayPeriodEnd('2026-09-30');
+    } else if (m === 'Octobre 2026') {
+      setPayPeriodStart('2026-10-01');
+      setPayPeriodEnd('2026-10-31');
+    } else if (m === 'Novembre 2026') {
+      setPayPeriodStart('2026-11-01');
+      setPayPeriodEnd('2026-11-30');
+    }
+  };
 
   // Keep selected tenant & rent amount in sync with available tenants
   useEffect(() => {
@@ -91,9 +109,11 @@ export default function Header() {
       leaseId: lease?.id || 'lse-1',
       amountFCFA: Number(payAmount) || tenant.rentFCFA,
       method: payMethod,
-      referenceNumber: payRef || `REC-${Date.now().toString().slice(-6)}`,
+      referenceNumber: payMethod === 'ESPECES' ? '' : payRef,
       periodMonthYear: payPeriod,
-      dueDate: payDueDate,
+      dueDate: `Du ${payPeriodStart} au ${payPeriodEnd}`,
+      periodStartDate: payPeriodStart,
+      periodEndDate: payPeriodEnd,
       paymentDate: payDate,
     });
 
@@ -305,7 +325,7 @@ export default function Header() {
                     <button
                       key={m}
                       type="button"
-                      onClick={() => setPayPeriod(m)}
+                      onClick={() => handleSelectPeriod(m)}
                       className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
                         payPeriod === m
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
@@ -318,30 +338,48 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* 2 dates: Échéance & Paiement */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Date d'Échéance</label>
-                  <input
-                    type="date"
-                    value={payDueDate}
-                    onChange={(e) => setPayDueDate(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
-                    required
-                  />
-                  <span className="text-[10px] text-slate-400">Date limite fixée au bail</span>
+              {/* Date d'Échéance : Commençant le ... Finissant le ... */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700">Date d'Échéance (Période Couverte)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Commençant le :
+                    </label>
+                    <input
+                      type="date"
+                      value={payPeriodStart}
+                      onChange={(e) => setPayPeriodStart(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Finissant le :
+                    </label>
+                    <input
+                      type="date"
+                      value={payPeriodEnd}
+                      onChange={(e) => setPayPeriodEnd(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Date de Paiement</label>
-                  <input
-                    type="date"
-                    value={payDate}
-                    onChange={(e) => setPayDate(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
-                    required
-                  />
-                  <span className="text-[10px] text-slate-400">Date effective d'encaissement</span>
-                </div>
+              </div>
+
+              {/* Date de Paiement */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Date de Paiement</label>
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                  required
+                />
+                <span className="text-[10px] text-slate-400">Date effective d'encaissement</span>
               </div>
 
               {/* Montant Payé */}
@@ -397,17 +435,32 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* Référence */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Référence / Numéro Transaction</label>
-                <input
-                  type="text"
-                  placeholder="ex: WAVE-9823190 / Virement CBAO / Reçu N° 45"
-                  value={payRef}
-                  onChange={(e) => setPayRef(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
-                />
-              </div>
+              {/* Référence / Numéro Transaction (Masqué si Espèces) */}
+              {payMethod !== 'ESPECES' ? (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Numéro de Référence / Transaction ({payMethod === 'WAVE' ? 'Wave' : payMethod === 'ORANGE_MONEY' ? 'Orange Money' : 'Virement'})
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={
+                      payMethod === 'WAVE'
+                        ? 'ex: WAVE-SN-9823190'
+                        : payMethod === 'ORANGE_MONEY'
+                        ? 'ex: OM-SN-78412093'
+                        : 'ex: VIR-CBAO-84920'
+                    }
+                    value={payRef}
+                    onChange={(e) => setPayRef(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
+                  />
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Paiement en espèces sélectionné : aucun numéro de référence requis.</span>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex gap-3">
                 <button
