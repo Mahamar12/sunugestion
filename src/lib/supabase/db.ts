@@ -860,6 +860,54 @@ export const SupabaseDbService = {
     }
   },
 
+  async updateLease(leaseId: string, updates: Partial<Lease>): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      let targetId = leaseId;
+      if (!isUUID(targetId) && updates.tenantName) {
+        const parts = updates.tenantName.trim().split(' ');
+        const firstName = parts[0];
+        const lastName = parts[parts.length - 1];
+        const { data: tenantRow } = await supabase
+          .from('tenants')
+          .select('id')
+          .or(`first_name.ilike.%${firstName}%,last_name.ilike.%${lastName}%`)
+          .limit(1)
+          .single();
+        if (tenantRow?.id) {
+          const { data: leaseRow } = await supabase
+            .from('leases')
+            .select('id')
+            .eq('tenant_id', tenantRow.id)
+            .limit(1)
+            .single();
+          if (leaseRow?.id) targetId = leaseRow.id;
+        }
+      }
+
+      if (isUUID(targetId)) {
+        const payload: any = {};
+        if (updates.startDate) payload.start_date = updates.startDate;
+        if (updates.endDate !== undefined) payload.end_date = updates.endDate || null;
+        if (updates.rentAmountFCFA !== undefined) payload.rent_amount_fcfa = updates.rentAmountFCFA;
+        if (updates.chargesAmountFCFA !== undefined) payload.charges_amount_fcfa = updates.chargesAmountFCFA;
+        if (updates.depositAmountFCFA !== undefined) payload.deposit_amount_fcfa = updates.depositAmountFCFA;
+        if (updates.dueDayOfMonth !== undefined) payload.payment_day = updates.dueDayOfMonth;
+        if (updates.status) payload.status = updates.status;
+
+        const { error } = await supabase.from('leases').update(payload).eq('id', targetId);
+        if (error) {
+          console.error('Supabase updateLease error:', error.message);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('Supabase updateLease error:', err);
+      return false;
+    }
+  },
+
   // ==========================================
   // PAYMENTS (PAIEMENTS & QUITTANCES)
   // ==========================================

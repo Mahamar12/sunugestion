@@ -67,6 +67,7 @@ export interface SunuGestionContextType {
   updateOwner: (ownerId: string, updates: Partial<Owner>) => Promise<void> | void;
   deleteOwner: (ownerId: string) => Promise<void> | void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
+  updateLease: (leaseId: string, updates: Partial<Lease>) => Promise<void> | void;
   deleteLease: (leaseId: string) => Promise<void> | void;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => void;
   deleteExpense: (expenseId: string) => void;
@@ -2043,6 +2044,38 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  const updateLease = async (leaseId: string, updates: Partial<Lease>): Promise<void> => {
+    setLeases((prev) => {
+      const updated = prev.map((l) => (l.id === leaseId ? { ...l, ...updates } : l));
+      try {
+        localStorage.setItem('sunu_leases', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    const target = leases.find((l) => l.id === leaseId);
+    const targetName = updates.tenantName || target?.tenantName || 'Locataire';
+    addAuditLog('MODIFICATION_CONTRAT', `Mise à jour du contrat de ${targetName}`, 'CONTRAT');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Contrat Mis à Jour',
+      message: `Le contrat de location de ${targetName} a été modifié avec succès.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    if (SupabaseDbService.isConfigured()) {
+      try {
+        await SupabaseDbService.updateLease(leaseId, updates);
+      } catch (err) {
+        console.warn('Supabase updateLease notice:', err);
+      }
+    }
+  };
+
   const addExpense = (expenseData: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => {
     const newId = generateUUID();
     const newExpense: Expense = {
@@ -2284,6 +2317,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         updateOwner,
         deleteOwner,
         createLease,
+        updateLease,
         deleteLease,
         addExpense,
         deleteExpense,

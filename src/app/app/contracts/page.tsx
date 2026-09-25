@@ -15,12 +15,13 @@ import {
   X,
   Edit3,
   Trash2,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-react';
 import { Lease } from '@/types/sunugestion';
 
 export default function ContractsPage() {
-  const { leases, tenants, units, properties, createLease, deleteLease, setSelectedDocumentForPrint } = useSunuGestion();
+  const { leases, tenants, units, properties, createLease, updateLease, deleteLease, setSelectedDocumentForPrint } = useSunuGestion();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [showModal, setShowModal] = useState(false);
@@ -39,6 +40,65 @@ export default function ContractsPage() {
   const [depositAmount, setDepositAmount] = useState(800000);
   const [dueDay, setDueDay] = useState(5);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+
+  // Edit Lease form state
+  const [leaseToEdit, setLeaseToEdit] = useState<Lease | null>(null);
+  const [editTenantName, setEditTenantName] = useState('');
+  const [editPropertyName, setEditPropertyName] = useState('');
+  const [editUnitNumber, setEditUnitNumber] = useState('');
+  const [editStartDate, setEditStartDate] = useState('2026-09-01');
+  const [editEndDate, setEditEndDate] = useState('2027-08-31');
+  const [editRentAmount, setEditRentAmount] = useState(400000);
+  const [editChargesAmount, setEditChargesAmount] = useState(30000);
+  const [editDepositAmount, setEditDepositAmount] = useState(800000);
+  const [editDueDay, setEditDueDay] = useState(5);
+  const [editStatus, setEditStatus] = useState<LeaseStatus>('ACTIF');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEditModal = (lease: Lease) => {
+    setLeaseToEdit(lease);
+    setEditTenantName(lease.tenantName);
+    setEditPropertyName(lease.propertyName);
+    setEditUnitNumber(lease.unitNumber);
+    setEditStartDate(lease.startDate || '2026-09-01');
+    setEditEndDate(lease.endDate || '2027-08-31');
+    setEditRentAmount(lease.rentAmountFCFA || 0);
+    setEditChargesAmount(lease.chargesAmountFCFA || 0);
+    setEditDepositAmount(lease.depositAmountFCFA || 0);
+    setEditDueDay(lease.dueDayOfMonth || 5);
+    setEditStatus(lease.status || 'ACTIF');
+  };
+
+  const handleUpdateLease = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leaseToEdit) return;
+
+    setIsUpdating(true);
+    try {
+      await updateLease(leaseToEdit.id, {
+        tenantName: editTenantName.trim(),
+        propertyName: editPropertyName.trim(),
+        unitNumber: editUnitNumber.trim(),
+        startDate: editStartDate,
+        endDate: editEndDate,
+        rentAmountFCFA: Number(editRentAmount),
+        chargesAmountFCFA: Number(editChargesAmount),
+        depositAmountFCFA: Number(editDepositAmount),
+        dueDayOfMonth: Number(editDueDay),
+        status: editStatus,
+      });
+
+      setLeaseToEdit(null);
+      setNotificationMsg(`Le contrat de ${editTenantName} a été modifié avec succès.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } catch (err) {
+      console.error('Error updating lease:', err);
+      setNotificationMsg(`Erreur lors de la modification du contrat.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const filteredLeases = leases.filter((l) => {
     const matchesSearch =
@@ -194,6 +254,15 @@ export default function ContractsPage() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(l)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer text-xs"
+                        title="Modifier ce contrat"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Modifier</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -471,6 +540,173 @@ export default function ContractsPage() {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md shadow-blue-600/20"
                 >
                   Générer Contrat & Échéances
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lease Modal */}
+      {leaseToEdit && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-slate-900 text-base">Modifier le Contrat de Location</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLeaseToEdit(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateLease} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Locataire Titulaire</label>
+                <input
+                  type="text"
+                  value={editTenantName}
+                  onChange={(e) => setEditTenantName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Bien / Propriété</label>
+                  <input
+                    type="text"
+                    value={editPropertyName}
+                    onChange={(e) => setEditPropertyName(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">N° / Nom du Logement</label>
+                  <input
+                    type="text"
+                    value={editUnitNumber}
+                    onChange={(e) => setEditUnitNumber(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Date d'Entrée (Début)</label>
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Date de Fin (Échéance)</label>
+                  <input
+                    type="date"
+                    value={editEndDate}
+                    onChange={(e) => setEditEndDate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Loyer Mensuel (FCFA)</label>
+                  <input
+                    type="number"
+                    value={editRentAmount}
+                    onChange={(e) => setEditRentAmount(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Charges Mensuelles (FCFA)</label>
+                  <input
+                    type="number"
+                    value={editChargesAmount}
+                    onChange={(e) => setEditChargesAmount(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Dépôt de Garantie / Caution (FCFA)</label>
+                  <input
+                    type="number"
+                    value={editDepositAmount}
+                    onChange={(e) => setEditDepositAmount(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Jour d'Échéance (du mois)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={editDueDay}
+                    onChange={(e) => setEditDueDay(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Statut du Contrat</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as LeaseStatus)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="ACTIF">ACTIF (En cours)</option>
+                  <option value="EXPIRANT_BIENTOT">EXPIRANT_BIENTOT (Fin proche)</option>
+                  <option value="RESILIE">RESILIE (Clôturé)</option>
+                  <option value="EN_ATTENTE">EN_ATTENTE (Signature)</option>
+                </select>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLeaseToEdit(null)}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer hover:bg-slate-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Enregistrer les modifications</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
