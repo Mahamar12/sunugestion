@@ -811,13 +811,49 @@ export const SupabaseDbService = {
     }
   },
 
-  async deleteLease(leaseId: string): Promise<boolean> {
+  async deleteLease(leaseId: string, tenantName?: string): Promise<boolean> {
     if (!supabase) return false;
-    if (!isUUID(leaseId)) return true;
     try {
-      const { error } = await supabase.from('leases').delete().eq('id', leaseId);
-      if (error) console.error('Supabase deleteLease error:', error.message);
-      return !error;
+      let targetId = leaseId;
+      if (!isUUID(targetId) && tenantName) {
+        const parts = tenantName.trim().split(' ');
+        const firstName = parts[0];
+        const lastName = parts[parts.length - 1];
+        const { data: tenantRow } = await supabase
+          .from('tenants')
+          .select('id')
+          .or(`first_name.ilike.%${firstName}%,last_name.ilike.%${lastName}%`)
+          .limit(1)
+          .single();
+        if (tenantRow?.id) {
+          const { data: leaseRow } = await supabase
+            .from('leases')
+            .select('id')
+            .eq('tenant_id', tenantRow.id)
+            .limit(1)
+            .single();
+          if (leaseRow?.id) targetId = leaseRow.id;
+        }
+      }
+
+      if (isUUID(targetId)) {
+        // Free up the unit in Supabase
+        const { data: leaseData } = await supabase.from('leases').select('unit_id').eq('id', targetId).single();
+        if (leaseData?.unit_id && isUUID(leaseData.unit_id)) {
+          await supabase.from('units').update({ status: 'DISPONIBLE' }).eq('id', leaseData.unit_id);
+        }
+
+        // Dissociate/delete dependent records to avoid FK constraint errors
+        await supabase.from('payments').delete().eq('lease_id', targetId);
+        await supabase.from('rent_schedules').delete().eq('lease_id', targetId);
+
+        const { error } = await supabase.from('leases').delete().eq('id', targetId);
+        if (error) {
+          console.error('Supabase deleteLease error:', error.message);
+          return false;
+        }
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase deleteLease error:', err);
       return false;

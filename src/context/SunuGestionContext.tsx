@@ -67,7 +67,7 @@ export interface SunuGestionContextType {
   updateOwner: (ownerId: string, updates: Partial<Owner>) => Promise<void> | void;
   deleteOwner: (ownerId: string) => Promise<void> | void;
   createLease: (lease: Omit<Lease, 'id' | 'createdAt'>) => void;
-  deleteLease: (leaseId: string) => void;
+  deleteLease: (leaseId: string) => Promise<void> | void;
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => void;
   deleteExpense: (expenseId: string) => void;
   deletePayment: (paymentId: string) => void;
@@ -1218,6 +1218,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           setUnits(parsedUnits);
         }
       }
+      const cachedLeases = localStorage.getItem('sunu_leases');
+      if (cachedLeases !== null) {
+        const parsedLeases = JSON.parse(cachedLeases);
+        if (Array.isArray(parsedLeases)) {
+          setLeases(parsedLeases);
+        }
+      }
     } catch (e) {
       console.warn('LocalStorage hydration notice:', e);
     }
@@ -1262,6 +1269,18 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           }
         }
         if (u && u.length > 0) setUnits(u);
+        let deletedTenantIds: string[] = [];
+        try {
+          const stored = localStorage.getItem('sunu_deleted_tenants');
+          if (stored) deletedTenantIds = JSON.parse(stored);
+        } catch (e) {}
+
+        let deletedLeaseIds: string[] = [];
+        try {
+          const stored = localStorage.getItem('sunu_deleted_leases');
+          if (stored) deletedLeaseIds = JSON.parse(stored);
+        } catch (e) {}
+
         if (o && Array.isArray(o) && o.length > 0) {
           setOwners(o);
           try {
@@ -1269,12 +1288,35 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           } catch (e) {}
         }
         if (t && Array.isArray(t)) {
-          setTenants(t);
-          try {
-            localStorage.setItem('sunu_tenants', JSON.stringify(t));
-          } catch (e) {}
+          const hasLocalTenants = typeof window !== 'undefined' && localStorage.getItem('sunu_tenants') !== null;
+          const filteredTenants = t.filter((item) => !deletedTenantIds.includes(item.id));
+          if (filteredTenants.length > 0) {
+            setTenants(filteredTenants);
+            try {
+              localStorage.setItem('sunu_tenants', JSON.stringify(filteredTenants));
+            } catch (e) {}
+          } else if (hasLocalTenants) {
+            try {
+              const localParsed = JSON.parse(localStorage.getItem('sunu_tenants') || '[]');
+              setTenants(localParsed);
+            } catch (e) {}
+          }
         }
-        if (l && l.length > 0) setLeases(l);
+        if (l && Array.isArray(l)) {
+          const hasLocalLeases = typeof window !== 'undefined' && localStorage.getItem('sunu_leases') !== null;
+          const filteredLeases = l.filter((item) => !deletedLeaseIds.includes(item.id) && !deletedTenantIds.includes(item.tenantId));
+          if (filteredLeases.length > 0) {
+            setLeases(filteredLeases);
+            try {
+              localStorage.setItem('sunu_leases', JSON.stringify(filteredLeases));
+            } catch (e) {}
+          } else if (hasLocalLeases) {
+            try {
+              const localParsed = JSON.parse(localStorage.getItem('sunu_leases') || '[]');
+              setLeases(localParsed);
+            } catch (e) {}
+          }
+        }
         if (pay && pay.length > 0) setPayments(pay);
         if (exp && exp.length > 0) setExpenses(exp);
         if (v && v.length > 0) setVendors(v);
@@ -1676,13 +1718,25 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     const tenantToDelete = tenants.find((t) => t.id === tenantId);
     if (!tenantToDelete) return;
 
-    // 1. Libérer l'unité occupée si liée
+    // 1. Ajouter à la liste noire des locataires supprimés
+    try {
+      const stored = localStorage.getItem('sunu_deleted_tenants');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      if (!list.includes(tenantId)) list.push(tenantId);
+      localStorage.setItem('sunu_deleted_tenants', JSON.stringify(list));
+    } catch (e) {}
+
+    // 2. Libérer l'unité occupée si liée
     if (tenantToDelete.unitId) {
-      setUnits((prev) =>
-        prev.map((u) => (u.id === tenantToDelete.unitId ? { ...u, status: 'DISPONIBLE' } : u))
-      );
-      setProperties((prev) =>
-        prev.map((p) => {
+      setUnits((prev) => {
+        const updated = prev.map((u) => (u.id === tenantToDelete.unitId ? { ...u, status: 'DISPONIBLE' as const } : u));
+        try {
+          localStorage.setItem('sunu_units', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+      setProperties((prev) => {
+        const updated = prev.map((p) => {
           if (p.id === tenantToDelete.propertyId) {
             return {
               ...p,
@@ -1690,11 +1744,24 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
             };
           }
           return p;
-        })
-      );
+        });
+        try {
+          localStorage.setItem('sunu_properties', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
     }
 
-    // 2. Suppression instantanée dans le state et le LocalStorage
+    // 3. Supprimer également les baux rattachés à ce locataire
+    setLeases((prev) => {
+      const updated = prev.filter((l) => l.tenantId !== tenantId);
+      try {
+        localStorage.setItem('sunu_leases', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 4. Suppression instantanée dans le state et le LocalStorage
     setTenants((prev) => {
       const updated = prev.filter((t) => t.id !== tenantId);
       try {
@@ -1719,7 +1786,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     };
     setNotifications((prev) => [notif, ...prev]);
 
-    // 3. Suppression dans Supabase Cloud
+    // 5. Suppression dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
       try {
         await SupabaseDbService.deleteTenant(
@@ -1866,17 +1933,29 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       id: newId,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setLeases((prev) => [newLease, ...prev]);
 
-    // Mark unit as occupied
-    setUnits((prev) =>
-      prev.map((u) => (u.id === leaseData.unitId ? { ...u, status: 'OCCUPE' } : u))
-    );
+    // 1. Sauvegarde instantanée dans le state et LocalStorage
+    setLeases((prev) => {
+      const updated = [newLease, ...prev];
+      try {
+        localStorage.setItem('sunu_leases', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
-    // Create schedule for first month
+    // 2. Marquer l'unité comme occupée
+    setUnits((prev) => {
+      const updated = prev.map((u) => (u.id === leaseData.unitId ? { ...u, status: 'OCCUPE' as const } : u));
+      try {
+        localStorage.setItem('sunu_units', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 3. Créer l'échéance de loyer
     const newSchedule: RentSchedule = {
       id: generateUUID(),
-      leaseId: newLease.id,
+      leaseId: newId,
       tenantId: newLease.tenantId,
       tenantName: newLease.tenantName,
       propertyName: newLease.propertyName,
@@ -1911,23 +1990,56 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const deleteLease = (leaseId: string) => {
+  const deleteLease = async (leaseId: string): Promise<void> => {
     const leaseToDelete = leases.find((l) => l.id === leaseId);
     if (!leaseToDelete) return;
 
+    // 1. Ajouter à la liste noire des contrats supprimés
+    try {
+      const stored = localStorage.getItem('sunu_deleted_leases');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      if (!list.includes(leaseId)) list.push(leaseId);
+      localStorage.setItem('sunu_deleted_leases', JSON.stringify(list));
+    } catch (e) {}
+
+    // 2. Libérer le logement
     if (leaseToDelete.unitId) {
-      setUnits((prev) =>
-        prev.map((u) => (u.id === leaseToDelete.unitId ? { ...u, status: 'DISPONIBLE' } : u))
-      );
+      setUnits((prev) => {
+        const updated = prev.map((u) => (u.id === leaseToDelete.unitId ? { ...u, status: 'DISPONIBLE' as const } : u));
+        try {
+          localStorage.setItem('sunu_units', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
     }
 
-    setLeases((prev) => prev.filter((l) => l.id !== leaseId));
-    addAuditLog('SUPPRESSION_CONTRAT', `Suppression du contrat ${leaseId}`, 'CONTRAT');
+    // 3. Supprimer le contrat du state et LocalStorage
+    setLeases((prev) => {
+      const updated = prev.filter((l) => l.id !== leaseId);
+      try {
+        localStorage.setItem('sunu_leases', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    addAuditLog('SUPPRESSION_CONTRAT', `Suppression du contrat de ${leaseToDelete.tenantName}`, 'CONTRAT');
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Contrat Supprimé',
+      message: `Le contrat de ${leaseToDelete.tenantName} a été supprimé.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
 
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.deleteLease(leaseId).catch((err) =>
-        console.warn('Supabase deleteLease error:', err)
-      );
+      try {
+        await SupabaseDbService.deleteLease(leaseId, leaseToDelete.tenantName);
+      } catch (err) {
+        console.warn('Supabase deleteLease error:', err);
+      }
     }
   };
 

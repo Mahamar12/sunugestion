@@ -14,7 +14,8 @@ import {
   Printer,
   X,
   Edit3,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Lease } from '@/types/sunugestion';
 
@@ -24,6 +25,7 @@ export default function ContractsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [showModal, setShowModal] = useState(false);
   const [leaseToDelete, setLeaseToDelete] = useState<Lease | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // New Lease form state
   const [tenantId, setTenantId] = useState(tenants[0]?.id || '');
@@ -250,15 +252,32 @@ export default function ContractsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteLease(leaseToDelete.id);
-                  setNotificationMsg(`Le contrat de ${leaseToDelete.tenantName} a été supprimé.`);
-                  setLeaseToDelete(null);
-                  setTimeout(() => setNotificationMsg(null), 4000);
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!leaseToDelete) return;
+                  const name = leaseToDelete.tenantName;
+                  setIsDeleting(true);
+                  try {
+                    await deleteLease(leaseToDelete.id);
+                    setNotificationMsg(`Le contrat de ${name} a été supprimé.`);
+                    setLeaseToDelete(null);
+                    setTimeout(() => setNotificationMsg(null), 4000);
+                  } catch (err) {
+                    console.error('Error deleting lease:', err);
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center gap-1.5"
               >
-                Confirmer la suppression
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <span>Confirmer la suppression</span>
+                )}
               </button>
             </div>
           </div>
