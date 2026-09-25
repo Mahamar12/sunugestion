@@ -11,6 +11,7 @@ import {
   Tenant,
   Lease,
   RentSchedule,
+  RentScheduleStatus,
   Payment,
   Arrear,
   Expense,
@@ -78,6 +79,7 @@ export interface SunuGestionContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy'>) => void;
   deleteExpense: (expenseId: string) => void;
   deletePayment: (paymentId: string) => void;
+  deleteRentSchedule: (scheduleId: string) => void;
   createMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateTicketStatus: (ticketId: string, status: MaintenanceTicket['status'], vendorId?: string) => void;
   sendRelance: (arrearId: string, channel: 'SMS' | 'WHATSAPP' | 'EMAIL') => void;
@@ -1232,6 +1234,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           setLeases(parsedLeases);
         }
       }
+      const cachedSchedules = localStorage.getItem('sunu_rent_schedules');
+      if (cachedSchedules !== null) {
+        const parsedSchedules = JSON.parse(cachedSchedules);
+        if (Array.isArray(parsedSchedules)) {
+          setRentSchedules(parsedSchedules);
+        }
+      }
     } catch (e) {
       console.warn('LocalStorage hydration notice:', e);
     }
@@ -1444,19 +1453,23 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     );
 
     // Update schedules
-    setRentSchedules((prev) =>
-      prev.map((sch) => {
+    setRentSchedules((prev) => {
+      const updated = prev.map((sch) => {
         if (sch.tenantId === data.tenantId && (sch.status === 'EN_RETARD' || sch.status === 'DUE' || sch.status === 'A_VENIR')) {
           return {
             ...sch,
             paidAmountFCFA: sch.paidAmountFCFA + data.amountFCFA,
             remainingFCFA: Math.max(0, sch.totalDueFCFA - (sch.paidAmountFCFA + data.amountFCFA)),
-            status: sch.paidAmountFCFA + data.amountFCFA >= sch.totalDueFCFA ? 'PAYE' : 'PARTIEL',
+            status: (sch.paidAmountFCFA + data.amountFCFA >= sch.totalDueFCFA ? 'PAYE' : 'PARTIEL') as RentScheduleStatus,
           };
         }
         return sch;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('sunu_rent_schedules', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     // Clear from Arrears list if settled
     setArrears((prev) => prev.filter((a) => a.tenantId !== data.tenantId));
@@ -1541,6 +1554,35 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         console.warn('Supabase deletePayment error:', err)
       );
     }
+  };
+
+  const deleteRentSchedule = (scheduleId: string) => {
+    const scheduleToDelete = rentSchedules.find((s) => s.id === scheduleId);
+    if (!scheduleToDelete) return;
+
+    setRentSchedules((prev) => {
+      const updated = prev.filter((s) => s.id !== scheduleId);
+      try {
+        localStorage.setItem('sunu_rent_schedules', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    addAuditLog(
+      'SUPPRESSION_ECHEANCE',
+      `Suppression de l'échéance ${scheduleToDelete.periodMonthYear} pour ${scheduleToDelete.tenantName}`,
+      'LOYER'
+    );
+
+    const notif: NotificationItem = {
+      id: generateUUID(),
+      type: 'SYSTEM',
+      title: 'Échéance Supprimée',
+      message: `L'échéance ${scheduleToDelete.periodMonthYear} de ${scheduleToDelete.tenantName} (${scheduleToDelete.totalDueFCFA.toLocaleString('fr-FR')} FCFA) a été supprimée.`,
+      date: new Date().toLocaleTimeString('fr-FR'),
+      read: false,
+    };
+    setNotifications((prev) => [notif, ...prev]);
   };
 
   const addProperty = (propData: Omit<Property, 'id' | 'createdAt'>) => {
@@ -2488,6 +2530,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         saasPlans: SAAS_PLANS,
         recordPayment,
         deletePayment,
+        deleteRentSchedule,
         addProperty,
         updateProperty,
         deleteProperty,

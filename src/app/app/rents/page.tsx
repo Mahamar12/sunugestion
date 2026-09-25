@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import { RentSchedule, PaymentMethod } from '@/types/sunugestion';
-import { CalendarCheck, Search, Filter, CheckCircle2, Clock, AlertTriangle, CreditCard, X, Printer, Calendar } from 'lucide-react';
+import { CalendarCheck, Search, Filter, CheckCircle2, Clock, AlertTriangle, CreditCard, X, Printer, Calendar, Trash2, AlertCircle } from 'lucide-react';
 
 function getDatesForPeriod(periodStr?: string) {
   if (!periodStr) return { start: '2026-09-01', end: '2026-09-30' };
@@ -28,10 +28,11 @@ function getDatesForPeriod(periodStr?: string) {
 }
 
 export default function RentSchedulesPage() {
-  const { rentSchedules, recordPayment, leases, tenants, setSelectedDocumentForPrint } = useSunuGestion();
+  const { rentSchedules, deleteRentSchedule, recordPayment, leases, tenants, setSelectedDocumentForPrint } = useSunuGestion();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [selectedSchedule, setSelectedSchedule] = useState<RentSchedule | null>(null);
+  const [scheduleToDelete, setScheduleToDelete] = useState<RentSchedule | null>(null);
 
   // Collect Payment Form State
   const [payAmount, setPayAmount] = useState<number>(0);
@@ -195,52 +196,62 @@ export default function RentSchedulesPage() {
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    {s.status !== 'PAYE' ? (
+                    <div className="flex items-center justify-end gap-2">
+                      {s.status !== 'PAYE' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCollect(s)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Encaisser</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tenantObj = tenants.find((t) => t.id === s.tenantId || `${t.firstName} ${t.lastName}` === s.tenantName);
+                            const dates = getDatesForPeriod(s.periodMonthYear);
+                            setSelectedDocumentForPrint({
+                              id: `QUITT-${s.id.slice(-6)}`,
+                              title: `Quittance de Loyer • ${s.periodMonthYear} • ${s.tenantName}`,
+                              category: 'QUITTANCE',
+                              tenantName: s.tenantName,
+                              propertyName: s.propertyName,
+                              amountFCFA: s.paidAmountFCFA || s.totalDueFCFA,
+                              date: '2026-09-25',
+                              metadata: {
+                                receiptNumber: `QUITT-${s.id.slice(-6)}`,
+                                periodMonthYear: s.periodMonthYear,
+                                paymentDate: '2026-09-25',
+                                dueDate: `Du ${dates.start} au ${dates.end}`,
+                                periodStartDate: dates.start,
+                                periodEndDate: dates.end,
+                                method: 'WAVE',
+                                referenceNumber: 'ENC-SOLDE-VALIDÉ',
+                                unitNumber: s.unitNumber || tenantObj?.unitNumber || 'Logement',
+                                tenantPhone: tenantObj?.phone || '+221 77 000 00 00',
+                                rentFCFA: s.paidAmountFCFA || s.totalDueFCFA,
+                                chargesFCFA: 0,
+                              }
+                            });
+                          }}
+                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer text-xs"
+                          title="Voir la quittance officielle"
+                        >
+                          <Printer className="w-3 h-3" />
+                          <span>Quittance</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => handleOpenCollect(s)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-all flex items-center gap-1 ml-auto cursor-pointer"
+                        onClick={() => setScheduleToDelete(s)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center"
+                        title="Supprimer cette échéance"
                       >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>Encaisser</span>
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tenantObj = tenants.find((t) => t.id === s.tenantId || `${t.firstName} ${t.lastName}` === s.tenantName);
-                          const dates = getDatesForPeriod(s.periodMonthYear);
-                          setSelectedDocumentForPrint({
-                            id: `QUITT-${s.id.slice(-6)}`,
-                            title: `Quittance de Loyer • ${s.periodMonthYear} • ${s.tenantName}`,
-                            category: 'QUITTANCE',
-                            tenantName: s.tenantName,
-                            propertyName: s.propertyName,
-                            amountFCFA: s.paidAmountFCFA || s.totalDueFCFA,
-                            date: '2026-09-25',
-                            metadata: {
-                              receiptNumber: `QUITT-${s.id.slice(-6)}`,
-                              periodMonthYear: s.periodMonthYear,
-                              paymentDate: '2026-09-25',
-                              dueDate: `Du ${dates.start} au ${dates.end}`,
-                              periodStartDate: dates.start,
-                              periodEndDate: dates.end,
-                              method: 'WAVE',
-                              referenceNumber: 'ENC-SOLDE-VALIDÉ',
-                              unitNumber: s.unitNumber || tenantObj?.unitNumber || 'Logement',
-                              tenantPhone: tenantObj?.phone || '+221 77 000 00 00',
-                              rentFCFA: s.paidAmountFCFA || s.totalDueFCFA,
-                              chargesFCFA: 0,
-                            }
-                          });
-                        }}
-                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer text-xs ml-auto"
-                        title="Voir la quittance officielle"
-                      >
-                        <Printer className="w-3 h-3" />
-                        <span>Quittance</span>
-                      </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -443,6 +454,45 @@ export default function RentSchedulesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Schedule Confirmation Modal */}
+      {scheduleToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600 mb-3">
+              <div className="p-2 bg-rose-50 rounded-xl">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">Supprimer cette échéance ?</h3>
+            </div>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer l'échéance de <span className="font-bold text-slate-900">{scheduleToDelete.periodMonthYear}</span> ({scheduleToDelete.totalDueFCFA.toLocaleString('fr-FR')} FCFA) pour <span className="font-bold text-slate-900">{scheduleToDelete.tenantName}</span> ({scheduleToDelete.propertyName} - {scheduleToDelete.unitNumber}) ?
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setScheduleToDelete(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteRentSchedule(scheduleToDelete.id);
+                  const msg = `Échéance de ${scheduleToDelete.periodMonthYear} supprimée pour ${scheduleToDelete.tenantName}.`;
+                  setScheduleToDelete(null);
+                  setNotificationMsg(msg);
+                  setTimeout(() => setNotificationMsg(null), 4000);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 transition-all cursor-pointer"
+              >
+                Supprimer
+              </button>
+            </div>
           </div>
         </div>
       )}
