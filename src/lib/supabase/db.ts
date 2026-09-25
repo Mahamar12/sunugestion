@@ -339,13 +339,34 @@ export const SupabaseDbService = {
     }
   },
 
-  async deleteProperty(propertyId: string): Promise<boolean> {
+  async deleteProperty(propertyId: string, propertyName?: string): Promise<boolean> {
     if (!supabase) return false;
-    if (!isUUID(propertyId)) return true;
     try {
-      const { error } = await supabase.from('properties').delete().eq('id', propertyId);
-      if (error) console.error('Supabase deleteProperty error:', error.message);
-      return !error;
+      let targetId = propertyId;
+      if (!isUUID(targetId) && propertyName) {
+        const { data: byName } = await supabase
+          .from('properties')
+          .select('id')
+          .ilike('name', `%${propertyName.trim()}%`)
+          .limit(1)
+          .single();
+        if (byName?.id) targetId = byName.id;
+      }
+
+      if (isUUID(targetId)) {
+        // Disassociate or delete all dependent records first to prevent FK constraint violations
+        await supabase.from('leases').delete().eq('property_id', targetId);
+        await supabase.from('units').delete().eq('property_id', targetId);
+        await supabase.from('expenses').delete().eq('property_id', targetId);
+        await supabase.from('maintenance_tickets').delete().eq('property_id', targetId);
+
+        const { error } = await supabase.from('properties').delete().eq('id', targetId);
+        if (error) {
+          console.error('Supabase deleteProperty error:', error.message);
+          return false;
+        }
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase deleteProperty error:', err);
       return false;

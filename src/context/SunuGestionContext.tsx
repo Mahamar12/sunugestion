@@ -58,7 +58,7 @@ export interface SunuGestionContextType {
 
   addProperty: (property: Omit<Property, 'id' | 'createdAt'>) => void;
   updateProperty: (propertyId: string, updates: Partial<Property>) => void;
-  deleteProperty: (propertyId: string) => void;
+  deleteProperty: (propertyId: string) => Promise<void> | void;
   addUnit: (unit: Omit<Unit, 'id'>) => void;
   deleteUnit: (unitId: string) => void;
   addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'totalPaidFCFA' | 'arrearsFCFA'>) => Promise<Tenant> | void;
@@ -1190,18 +1190,32 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
   // Hydratation instantanée LocalStorage pour éviter tout flash d'anciennes données
   useEffect(() => {
     try {
+      const cachedProperties = localStorage.getItem('sunu_properties');
+      if (cachedProperties !== null) {
+        const parsed = JSON.parse(cachedProperties);
+        if (Array.isArray(parsed)) {
+          setProperties(parsed);
+        }
+      }
       const cachedTenants = localStorage.getItem('sunu_tenants');
-      if (cachedTenants) {
+      if (cachedTenants !== null) {
         const parsed = JSON.parse(cachedTenants);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setTenants(parsed);
         }
       }
       const cachedOwners = localStorage.getItem('sunu_owners');
-      if (cachedOwners) {
+      if (cachedOwners !== null) {
         const parsedOwners = JSON.parse(cachedOwners);
-        if (Array.isArray(parsedOwners) && parsedOwners.length > 0) {
+        if (Array.isArray(parsedOwners)) {
           setOwners(parsedOwners);
+        }
+      }
+      const cachedUnits = localStorage.getItem('sunu_units');
+      if (cachedUnits !== null) {
+        const parsedUnits = JSON.parse(cachedUnits);
+        if (Array.isArray(parsedUnits)) {
+          setUnits(parsedUnits);
         }
       }
     } catch (e) {
@@ -1226,7 +1240,27 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         SupabaseDbService.getExpenses(),
         SupabaseDbService.getVendors(),
       ]).then(([p, u, o, t, l, pay, exp, v]) => {
-        if (p && p.length > 0) setProperties(p);
+        let deletedPropIds: string[] = [];
+        try {
+          const stored = localStorage.getItem('sunu_deleted_properties');
+          if (stored) deletedPropIds = JSON.parse(stored);
+        } catch (e) {}
+
+        if (p && Array.isArray(p)) {
+          const hasLocalProps = typeof window !== 'undefined' && localStorage.getItem('sunu_properties') !== null;
+          const filteredRemote = p.filter((item) => !deletedPropIds.includes(item.id));
+          if (filteredRemote.length > 0) {
+            setProperties(filteredRemote);
+            try {
+              localStorage.setItem('sunu_properties', JSON.stringify(filteredRemote));
+            } catch (e) {}
+          } else if (hasLocalProps) {
+            try {
+              const localParsed = JSON.parse(localStorage.getItem('sunu_properties') || '[]');
+              setProperties(localParsed);
+            } catch (e) {}
+          }
+        }
         if (u && u.length > 0) setUnits(u);
         if (o && Array.isArray(o) && o.length > 0) {
           setOwners(o);
@@ -1400,7 +1434,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       id: newId,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setProperties((prev) => [newProp, ...prev]);
+    setProperties((prev) => {
+      const updated = [newProp, ...prev];
+      try {
+        localStorage.setItem('sunu_properties', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     addAuditLog('CREATION_PROPRIETE', `Ajout de la propriété "${newProp.name}" à ${newProp.neighborhood}`, 'PROPRIETE');
 
     const notif: NotificationItem = {
@@ -1420,13 +1460,44 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const deleteProperty = (propertyId: string) => {
+  const deleteProperty = async (propertyId: string): Promise<void> => {
     const propToDelete = properties.find((p) => p.id === propertyId);
     if (!propToDelete) return;
 
-    setProperties((prev) => prev.filter((p) => p.id !== propertyId));
-    setUnits((prev) => prev.filter((u) => u.propertyId !== propertyId));
-    setLeases((prev) => prev.filter((l) => l.propertyId !== propertyId));
+    // 1. Enregistrer dans la liste noire des IDs supprimés
+    try {
+      const stored = localStorage.getItem('sunu_deleted_properties');
+      const deletedList: string[] = stored ? JSON.parse(stored) : [];
+      if (!deletedList.includes(propertyId)) {
+        deletedList.push(propertyId);
+      }
+      localStorage.setItem('sunu_deleted_properties', JSON.stringify(deletedList));
+    } catch (e) {}
+
+    // 2. Supprimer immédiatement dans le state et LocalStorage
+    setProperties((prev) => {
+      const updated = prev.filter((p) => p.id !== propertyId);
+      try {
+        localStorage.setItem('sunu_properties', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    setUnits((prev) => {
+      const updated = prev.filter((u) => u.propertyId !== propertyId);
+      try {
+        localStorage.setItem('sunu_units', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    setLeases((prev) => {
+      const updated = prev.filter((l) => l.propertyId !== propertyId);
+      try {
+        localStorage.setItem('sunu_leases', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     addAuditLog('SUPPRESSION_PROPRIETE', `Suppression du bien ${propToDelete.name}`, 'PROPRIETE');
 
@@ -1440,17 +1511,24 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     };
     setNotifications((prev) => [notif, ...prev]);
 
+    // 3. Supprimer dans Supabase Cloud
     if (SupabaseDbService.isConfigured()) {
-      SupabaseDbService.deleteProperty(propertyId).catch((err) =>
-        console.warn('Supabase deleteProperty error:', err)
-      );
+      try {
+        await SupabaseDbService.deleteProperty(propertyId, propToDelete.name);
+      } catch (err) {
+        console.warn('Supabase deleteProperty error:', err);
+      }
     }
   };
 
   const updateProperty = (propertyId: string, updates: Partial<Property>) => {
-    setProperties((prev) =>
-      prev.map((p) => (p.id === propertyId ? { ...p, ...updates } : p))
-    );
+    setProperties((prev) => {
+      const updated = prev.map((p) => (p.id === propertyId ? { ...p, ...updates } : p));
+      try {
+        localStorage.setItem('sunu_properties', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     if (updates.ownerId || updates.ownerName) {
       setUnits((prev) =>
         prev.map((u) =>

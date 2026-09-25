@@ -18,7 +18,8 @@ import {
   DollarSign,
   ChevronRight,
   Trash2,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 
 export default function PropertiesPage() {
@@ -28,6 +29,7 @@ export default function PropertiesPage() {
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // New property form state
   const [name, setName] = useState('');
@@ -393,17 +395,35 @@ export default function PropertiesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!propertyToDelete) return;
                   const name = propertyToDelete.name;
-                  deleteProperty(propertyToDelete.id);
-                  setNotificationMsg(`Le bien "${name}" a été supprimé avec succès.`);
-                  setPropertyToDelete(null);
-                  setTimeout(() => setNotificationMsg(null), 4000);
+                  setIsDeleting(true);
+                  try {
+                    await deleteProperty(propertyToDelete.id);
+                    setNotificationMsg(`Le bien "${name}" a été supprimé avec succès.`);
+                    setPropertyToDelete(null);
+                    setTimeout(() => setNotificationMsg(null), 4000);
+                  } catch (err) {
+                    console.error('Error deleting property:', err);
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-bold rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Confirmer la suppression</span>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmer la suppression</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
