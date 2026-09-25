@@ -17,7 +17,15 @@ import {
   DollarSign,
   Plus,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Users,
+  Phone,
+  MessageSquare,
+  Mail,
+  Key,
+  ArrowRight,
+  Search,
+  ChevronRight
 } from 'lucide-react';
 
 export default function PropertyDetailPage() {
@@ -26,11 +34,124 @@ export default function PropertyDetailPage() {
   const propertyId = params?.id as string;
   const { properties, units, tenants, maintenanceTickets, expenses, deleteProperty } = useSunuGestion();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ALL' | 'OCCUPIED' | 'VACANT'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const property = properties.find((p) => p.id === propertyId) || properties[0];
-  const propertyUnits = units.filter((u) => u.propertyId === property?.id || u.propertyName === property?.name);
-  const propertyTickets = maintenanceTickets.filter((t) => t.propertyId === property?.id || t.propertyName === property?.name);
-  const propertyExpenses = expenses.filter((e) => e.propertyId === property?.id || e.propertyName === property?.name);
+  const propertyUnits = units.filter(
+    (u) =>
+      u.propertyId === property?.id ||
+      (u.propertyName && property?.name && u.propertyName.trim().toLowerCase() === property?.name.trim().toLowerCase())
+  );
+  const propertyTickets = maintenanceTickets.filter(
+    (t) => t.propertyId === property?.id || t.propertyName === property?.name
+  );
+  const propertyExpenses = expenses.filter(
+    (e) => e.propertyId === property?.id || e.propertyName === property?.name
+  );
+
+  const propertyTenants = property
+    ? tenants.filter(
+        (t) =>
+          t.propertyId === property.id ||
+          (t.propertyName &&
+            property.name &&
+            t.propertyName.trim().toLowerCase() === property.name.trim().toLowerCase()) ||
+          propertyUnits.some(
+            (u) =>
+              u.id === t.unitId ||
+              (u.unitNumber && t.unitNumber && u.unitNumber.trim().toLowerCase() === t.unitNumber.trim().toLowerCase())
+          )
+      )
+    : [];
+
+  // Occupied list from units table
+  const occupiedUnitsFromTable = propertyUnits
+    .filter(
+      (u) =>
+        u.status === 'OCCUPE' ||
+        u.status === 'EN_RETARD' ||
+        Boolean(u.tenantId) ||
+        Boolean(u.tenantName) ||
+        propertyTenants.some(
+          (t) =>
+            t.unitId === u.id ||
+            (u.unitNumber && t.unitNumber && u.unitNumber.trim().toLowerCase() === t.unitNumber.trim().toLowerCase())
+        )
+    )
+    .map((u) => {
+      const tenant = propertyTenants.find(
+        (t) =>
+          t.id === u.tenantId ||
+          t.unitId === u.id ||
+          (t.unitNumber && u.unitNumber && t.unitNumber.trim().toLowerCase() === u.unitNumber.trim().toLowerCase())
+      );
+      return {
+        unit: u,
+        tenant: tenant || null,
+        tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : (u.tenantName || 'Locataire actuel'),
+        rentFCFA: u.rentFCFA || (tenant ? tenant.rentFCFA : 0),
+      };
+    });
+
+  // Extra tenants belonging to this property
+  const extraTenantsInProperty = propertyTenants
+    .filter((t) => !occupiedUnitsFromTable.some((item) => item.tenant?.id === t.id))
+    .map((t) => ({
+      unit: {
+        id: t.unitId || `synth-${t.id}`,
+        propertyId: property?.id || '',
+        propertyName: property?.name || '',
+        unitNumber: t.unitNumber || 'Logement',
+        type: 'APPARTEMENT' as any,
+        floor: 'RDC / Étage',
+        surfaceM2: 0,
+        roomsCount: 0,
+        rentFCFA: t.rentFCFA,
+        chargesFCFA: 0,
+        status: 'OCCUPE' as any,
+        tenantId: t.id,
+        tenantName: `${t.firstName} ${t.lastName}`,
+        ownerId: property?.ownerId || '',
+        ownerName: property?.ownerName || '',
+      },
+      tenant: t,
+      tenantName: `${t.firstName} ${t.lastName}`,
+      rentFCFA: t.rentFCFA,
+    }));
+
+  const allOccupiedUnits = [...occupiedUnitsFromTable, ...extraTenantsInProperty];
+  const allVacantUnits = propertyUnits.filter(
+    (u) => !occupiedUnitsFromTable.some((item) => item.unit.id === u.id)
+  );
+
+  const totalUnitsCount = Math.max(property?.totalUnits || 0, allOccupiedUnits.length + allVacantUnits.length);
+  const occupiedCount = allOccupiedUnits.length;
+  const vacantCount = allVacantUnits.length > 0 ? allVacantUnits.length : Math.max(0, totalUnitsCount - occupiedCount);
+  const totalOccupiedRent = allOccupiedUnits.reduce((sum, item) => sum + (item.rentFCFA || 0), 0);
+
+  // Search filter
+  const filteredOccupiedUnits = allOccupiedUnits.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.tenantName.toLowerCase().includes(q) ||
+      item.unit.unitNumber.toLowerCase().includes(q) ||
+      (item.tenant?.profession && item.tenant.profession.toLowerCase().includes(q)) ||
+      (item.tenant?.phone && item.tenant.phone.includes(q)) ||
+      (item.tenant?.whatsapp && item.tenant.whatsapp.includes(q))
+    );
+  });
+
+  const filteredVacantUnits = allVacantUnits.filter((u) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      u.unitNumber.toLowerCase().includes(q) ||
+      u.type.toLowerCase().includes(q) ||
+      u.floor.toLowerCase().includes(q)
+    );
+  });
 
   if (!property) {
     return (
@@ -49,7 +170,7 @@ export default function PropertyDetailPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-6 bg-slate-50 min-h-screen">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <Link
@@ -104,7 +225,7 @@ export default function PropertyDetailPage() {
       )}
 
       {/* Hero Property Overview Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-3">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-3">
         <div className="h-64 lg:h-auto relative bg-slate-100">
           <img src={property.image} alt={property.name} className="w-full h-full object-cover" />
           <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-xs font-bold uppercase">
@@ -129,73 +250,310 @@ export default function PropertyDetailPage() {
             <p className="text-xs text-slate-600 mt-3 leading-relaxed">{property.description}</p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
             <div>
               <span className="text-slate-400 font-medium block">Propriétaire</span>
               <strong className="text-slate-900">{property.ownerName}</strong>
             </div>
             <div>
               <span className="text-slate-400 font-medium block">Logements</span>
-              <strong className="text-slate-900">{property.occupiedUnits} / {property.totalUnits} Occupés</strong>
+              <strong className="text-slate-900">{occupiedCount} / {totalUnitsCount} Occupés</strong>
             </div>
             <div>
               <span className="text-slate-400 font-medium block">Valeur estimée</span>
               <strong className="text-emerald-700 font-bold">{(property.valuationFCFA / 1000000).toFixed(0)}M FCFA</strong>
             </div>
             <div>
-              <span className="text-slate-400 font-medium block">Taux occupation</span>
+              <span className="text-slate-400 font-medium block">Loyers perçus</span>
               <strong className="text-blue-700 font-bold">
-                {property.totalUnits > 0 ? Math.round((property.occupiedUnits / property.totalUnits) * 100) : 100}%
+                {totalOccupiedRent.toLocaleString('fr-FR')} FCFA/m
               </strong>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Units Table Section */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
-            <Home className="w-4 h-4 text-blue-600" /> Logements & Unités rattachés
-          </h2>
-          <Link href="/app/units" className="text-xs font-bold text-blue-600 hover:underline">
-            Gérer logements
-          </Link>
+      {/* Logements & Locataires Section */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Header with Title and Tabs */}
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-600" />
+              <span>Logements & Locataires du bien</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Détail complet des appartements occupés avec locataires et des appartements non occupés (vacants).
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Tab switchers */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveTab('ALL')}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  activeTab === 'ALL'
+                    ? 'bg-white text-blue-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tous ({allOccupiedUnits.length + allVacantUnits.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('OCCUPIED')}
+                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'OCCUPIED'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-emerald-700'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>Occupés ({allOccupiedUnits.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('VACANT')}
+                className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'VACANT'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-amber-700'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span>Non occupés ({allVacantUnits.length})</span>
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="relative w-full sm:w-56">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Rechercher locataire..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                <th className="p-3">Numéro / N° Unit</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Étage</th>
-                <th className="p-3">Superficie</th>
-                <th className="p-3">Loyer Mensuel</th>
-                <th className="p-3">Locataire Actuel</th>
-                <th className="p-3">Statut</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {propertyUnits.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-bold text-slate-900">{u.unitNumber}</td>
-                  <td className="p-3 text-slate-600">{u.type}</td>
-                  <td className="p-3 text-slate-600">{u.floor}</td>
-                  <td className="p-3 text-slate-600">{u.surfaceM2} m² ({u.roomsCount} pièces)</td>
-                  <td className="p-3 font-bold text-emerald-700">{u.rentFCFA.toLocaleString('fr-FR')} FCFA</td>
-                  <td className="p-3 font-semibold text-slate-800">{u.tenantName || 'Aucun (Vacant)'}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      u.status === 'OCCUPE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {u.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Content list */}
+        <div className="p-5 sm:p-6 space-y-6">
+          {/* SECTION 1: OCCUPIED UNITS WITH FULL TENANT DETAILS */}
+          {(activeTab === 'ALL' || activeTab === 'OCCUPIED') && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <span>Logements Occupés & Coordonnées Locataires</span>
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-extrabold">
+                    {filteredOccupiedUnits.length}
+                  </span>
+                </h3>
+              </div>
+
+              {filteredOccupiedUnits.length === 0 ? (
+                <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                  {searchQuery
+                    ? 'Aucun locataire ne correspond à votre recherche.'
+                    : 'Aucun appartement n\'est actuellement occupé dans ce bien.'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredOccupiedUnits.map((item, idx) => {
+                    const t = item.tenant;
+                    const isLate = t?.status === 'EN_RETARD' || (t?.arrearsFCFA && t.arrearsFCFA > 0);
+                    const cleanPhone = (t?.whatsapp || t?.phone || '').replace(/[^0-9]/g, '');
+
+                    return (
+                      <div
+                        key={item.unit.id || `occ-${idx}`}
+                        className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all space-y-3"
+                      >
+                        {/* Unit info header */}
+                        <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-lg border border-blue-200/60">
+                              {item.unit.unitNumber}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              {item.unit.type} • {item.unit.floor}
+                              {item.unit.surfaceM2 ? ` • ${item.unit.surfaceM2} m²` : ''}
+                            </span>
+                          </div>
+                          <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60">
+                            {item.rentFCFA.toLocaleString('fr-FR')} FCFA/m
+                          </span>
+                        </div>
+
+                        {/* Tenant details */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm shadow-blue-600/20">
+                            {item.tenantName
+                              .split(' ')
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join('')}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <h4 className="font-extrabold text-slate-900 text-sm truncate">
+                                {item.tenantName}
+                              </h4>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold shrink-0 border ${
+                                  isLate
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                {isLate ? 'Paiement en retard' : 'Loyer à jour'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              {t?.profession || 'Locataire occupant'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Details grid */}
+                        <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px]">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-medium">Téléphone</span>
+                            <a
+                              href={`tel:${t?.phone}`}
+                              className="font-bold text-slate-800 hover:text-blue-600 flex items-center gap-1"
+                            >
+                              <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{t?.phone || 'Non renseigné'}</span>
+                            </a>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-medium">N° Pièce (CNI)</span>
+                            <span className="font-bold text-slate-800 truncate block">
+                              {t?.identityDocNumber || 'Enregistrée'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-medium">Date d'entrée</span>
+                            <span className="font-bold text-slate-800 truncate block">
+                              {t?.entryDate || 'Bail actif'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-medium">Arriérés</span>
+                            <span className={`font-extrabold truncate block ${isLate ? 'text-rose-600' : 'text-emerald-700'}`}>
+                              {t?.arrearsFCFA ? `${t.arrearsFCFA.toLocaleString('fr-FR')} FCFA` : '0 FCFA'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick actions: WhatsApp & Contract */}
+                        <div className="flex items-center gap-2 pt-1">
+                          {cleanPhone && (
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>WhatsApp</span>
+                            </a>
+                          )}
+
+                          <Link
+                            href="/app/contracts"
+                            className="flex-1 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center"
+                          >
+                            <span>Voir Contrat</span>
+                            <ArrowRight className="w-3 h-3 text-slate-500" />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SECTION 2: UNOCCUPIED / VACANT UNITS */}
+          {(activeTab === 'ALL' || activeTab === 'VACANT') && (
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                  <span>Logements Non Occupés (Vacants / Disponibles à la location)</span>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold">
+                    {filteredVacantUnits.length}
+                  </span>
+                </h3>
+              </div>
+
+              {filteredVacantUnits.length === 0 ? (
+                <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                  {searchQuery
+                    ? 'Aucun appartement disponible ne correspond à votre recherche.'
+                    : 'Tous les appartements de ce bien sont actuellement occupés !'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredVacantUnits.map((u) => (
+                    <div
+                      key={u.id}
+                      className="bg-white rounded-2xl border border-amber-200/80 p-4 shadow-xs hover:shadow-md transition-all space-y-3"
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                          <span className="font-extrabold text-slate-900 text-sm block">
+                            {u.unitNumber}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {u.type} • {u.floor} {u.surfaceM2 ? `• ${u.surfaceM2} m²` : ''} {u.roomsCount ? `(${u.roomsCount} pièces)` : ''}
+                          </span>
+                        </div>
+
+                        <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold text-[10px] rounded-lg border border-amber-200/80">
+                          DISPONIBLE
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-medium block">Loyer Demandé</span>
+                          <span className="font-black text-amber-900 text-sm">
+                            {u.rentFCFA.toLocaleString('fr-FR')} FCFA
+                          </span>
+                          {u.chargesFCFA > 0 && (
+                            <span className="text-[10px] text-slate-500 block">
+                              + {u.chargesFCFA.toLocaleString('fr-FR')} FCFA charges
+                            </span>
+                          )}
+                        </div>
+
+                        <Link
+                          href="/app/contracts"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Créer Bail</span>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
