@@ -28,13 +28,30 @@ import {
 import { Tenant, Property } from '@/types/sunugestion';
 
 export default function TenantsPage() {
-  const { tenants, units, properties, addTenant, updateTenant, deleteTenant } = useSunuGestion();
+  const { tenants, units, properties, payments, addTenant, updateTenant, deleteTenant } = useSunuGestion();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Compute 100% authentic total paid from actual recorded payments
+  const getTenantRealPaid = (t: Tenant): number => {
+    return payments
+      .filter((p) => {
+        if (p.tenantId && (p.tenantId === t.id || p.tenantId === t.currentLeaseId)) return true;
+        if (p.tenantName) {
+          const pName = p.tenantName.trim().toLowerCase();
+          const tFullName = `${t.firstName} ${t.lastName}`.trim().toLowerCase();
+          const tRevName = `${t.lastName} ${t.firstName}`.trim().toLowerCase();
+          if (pName === tFullName || pName === tRevName) return true;
+          if (pName.includes(t.lastName.trim().toLowerCase()) && pName.includes(t.firstName.trim().toLowerCase())) return true;
+        }
+        return false;
+      })
+      .reduce((acc, p) => acc + (Number(p.amountFCFA) || 0), 0);
+  };
 
   // New Tenant Form state
   const [firstName, setFirstName] = useState('');
@@ -266,6 +283,36 @@ export default function TenantsPage() {
         </button>
       </div>
 
+      {/* Financial & Tenant KPIs with 100% Real Numbers */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Locataires Actifs</p>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{tenants.filter(t => t.status === 'ACTIF').length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{tenants.length} locataires au total</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Loyers Mensuels</p>
+          <p className="text-xl sm:text-2xl font-black text-blue-600 mt-1">
+            {tenants.reduce((acc, t) => acc + (Number(t.rentFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Montant attendu / mois</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Encaissé Réel</p>
+          <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
+            {tenants.reduce((acc, t) => acc + getTenantRealPaid(t), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+          </p>
+          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Cumul paiements enregistrés</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Impayés</p>
+          <p className={`text-xl sm:text-2xl font-black mt-1 ${tenants.reduce((acc, t) => acc + (Number(t.arrearsFCFA) || 0), 0) > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+            {tenants.reduce((acc, t) => acc + (Number(t.arrearsFCFA) || 0), 0).toLocaleString('fr-FR')} <span className="text-xs font-bold text-slate-400">FCFA</span>
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Arriérés cumulés</p>
+        </div>
+      </div>
+
       {/* Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="relative max-w-md">
@@ -290,7 +337,7 @@ export default function TenantsPage() {
                 <th className="p-4">Contact WhatsApp / Tél</th>
                 <th className="p-4">Bien & Logement Affecté</th>
                 <th className="p-4">Loyer Mensuel</th>
-                <th className="p-4">Total Payé</th>
+                <th className="p-4">Total Payé (Réel)</th>
                 <th className="p-4">Impayés / Retard</th>
                 <th className="p-4">Statut</th>
                 <th className="p-4 text-right">Actions</th>
@@ -340,8 +387,17 @@ export default function TenantsPage() {
                     {t.rentFCFA.toLocaleString('fr-FR')} FCFA
                   </td>
 
-                  <td className="p-4 text-slate-600 font-medium">
-                    {t.totalPaidFCFA ? `${t.totalPaidFCFA.toLocaleString('fr-FR')} FCFA` : '0 FCFA'}
+                  <td className="p-4">
+                    {(() => {
+                      const realPaid = getTenantRealPaid(t);
+                      return realPaid > 0 ? (
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 text-xs inline-block">
+                          {realPaid.toLocaleString('fr-FR')} FCFA
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium text-xs">0 FCFA</span>
+                      );
+                    })()}
                   </td>
 
                   <td className="p-4">

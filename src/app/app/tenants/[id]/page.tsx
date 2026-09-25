@@ -34,7 +34,18 @@ export default function TenantDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const tenantLease = leases.find((l) => l.tenantId === tenant.id) || leases[0];
-  const tenantPayments = payments.filter((p) => p.tenantId === tenant.id);
+  const tenantPayments = payments.filter((p) => {
+    if (p.tenantId && (p.tenantId === tenant.id || p.tenantId === tenant.currentLeaseId)) return true;
+    if (p.tenantName) {
+      const pName = p.tenantName.trim().toLowerCase();
+      const tFullName = `${tenant.firstName} ${tenant.lastName}`.trim().toLowerCase();
+      const tRevName = `${tenant.lastName} ${tenant.firstName}`.trim().toLowerCase();
+      if (pName === tFullName || pName === tRevName) return true;
+      if (pName.includes(tenant.lastName.trim().toLowerCase()) && pName.includes(tenant.firstName.trim().toLowerCase())) return true;
+    }
+    return false;
+  });
+  const totalPaidReal = tenantPayments.reduce((acc, p) => acc + (Number(p.amountFCFA) || 0), 0);
   const tenantArrears = arrears.filter((a) => a.tenantId === tenant.id);
   const tenantDocs = documents.filter((d) => d.tenantName?.includes(tenant.firstName));
   const tenantTickets = maintenanceTickets.filter((t) => t.tenantId === tenant.id);
@@ -96,6 +107,10 @@ export default function TenantDetailPage() {
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
             <span className="text-slate-400 block font-medium">Loyer Mensuel</span>
             <strong className="text-emerald-700 text-base font-black">{tenant.rentFCFA.toLocaleString('fr-FR')} FCFA</strong>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span className="text-slate-400 block font-medium">Total Payé (Réel)</span>
+            <strong className="text-emerald-700 text-base font-black">{totalPaidReal.toLocaleString('fr-FR')} FCFA</strong>
           </div>
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
             <span className="text-slate-400 block font-medium">Solde Impayés</span>
@@ -170,7 +185,15 @@ export default function TenantDetailPage() {
 
         {activeTab === 'PAYMENTS' && (
           <div className="space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Historique des Paiements Effectués</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Historique des Paiements Effectués</h3>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-bold text-xs">
+                  Total Encaissé Réel : {totalPaidReal.toLocaleString('fr-FR')} FCFA
+                </span>
+                <span className="text-slate-400 text-xs font-semibold">({tenantPayments.length} quittance{tenantPayments.length > 1 ? 's' : ''})</span>
+              </div>
+            </div>
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50 font-semibold text-slate-500 border-b">

@@ -471,7 +471,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 400000,
     entryDate: '2026-02-01',
     currentLeaseId: 'lse-1',
-    totalPaidFCFA: 2800000,
+    totalPaidFCFA: 430000,
     arrearsFCFA: 0,
     status: 'ACTIF',
     createdAt: '2026-02-01',
@@ -498,7 +498,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 450000,
     entryDate: '2026-03-01',
     currentLeaseId: 'lse-2',
-    totalPaidFCFA: 1000000,
+    totalPaidFCFA: 0,
     arrearsFCFA: 0,
     status: 'ACTIF',
     createdAt: '2026-03-01',
@@ -525,7 +525,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 1200000,
     entryDate: '2026-01-15',
     currentLeaseId: 'lse-3',
-    totalPaidFCFA: 8400000,
+    totalPaidFCFA: 1300000,
     arrearsFCFA: 0,
     status: 'ACTIF',
     createdAt: '2026-01-15',
@@ -551,7 +551,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 750000,
     entryDate: '2026-02-15',
     currentLeaseId: 'lse-4',
-    totalPaidFCFA: 4500000,
+    totalPaidFCFA: 800000,
     arrearsFCFA: 0,
     status: 'ACTIF',
     createdAt: '2026-02-15',
@@ -577,7 +577,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 500000,
     entryDate: '2026-01-01',
     currentLeaseId: 'lse-5',
-    totalPaidFCFA: 3500000,
+    totalPaidFCFA: 0,
     arrearsFCFA: 500000,
     status: 'EN_RETARD',
     createdAt: '2026-01-01',
@@ -603,7 +603,7 @@ const INITIAL_TENANTS: Tenant[] = [
     rentFCFA: 350000,
     entryDate: '2026-03-15',
     currentLeaseId: 'lse-6',
-    totalPaidFCFA: 1750000,
+    totalPaidFCFA: 0,
     arrearsFCFA: 0,
     status: 'ACTIF',
     createdAt: '2026-03-15',
@@ -1241,6 +1241,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           setRentSchedules(parsedSchedules);
         }
       }
+      const cachedPayments = localStorage.getItem('sunu_payments');
+      if (cachedPayments !== null) {
+        const parsedPayments = JSON.parse(cachedPayments);
+        if (Array.isArray(parsedPayments)) {
+          setPayments(parsedPayments);
+        }
+      }
     } catch (e) {
       console.warn('LocalStorage hydration notice:', e);
     }
@@ -1434,7 +1441,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       periodEndDate: pEnd,
     };
 
-    setPayments((prev) => [newPayment, ...prev]);
+    setPayments((prev) => {
+      const updatedPayments = [newPayment, ...prev];
+      try {
+        localStorage.setItem('sunu_payments', JSON.stringify(updatedPayments));
+      } catch (e) {}
+      return updatedPayments;
+    });
 
     // Update tenant total paid & arrears
     setTenants((prev) =>
@@ -1546,7 +1559,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     const paymentToDelete = payments.find((p) => p.id === paymentId);
     if (!paymentToDelete) return;
 
-    setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+    setPayments((prev) => {
+      const updated = prev.filter((p) => p.id !== paymentId);
+      try {
+        localStorage.setItem('sunu_payments', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     addAuditLog('SUPPRESSION_PAIEMENT', `Suppression du paiement ${paymentToDelete.receiptNumber}`, 'PAIEMENT');
 
     if (SupabaseDbService.isConfigured()) {
