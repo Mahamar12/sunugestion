@@ -92,6 +92,21 @@ export default function TenantsPage() {
       )
     : [];
 
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && properties.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const propParam = params.get('propertyId');
+      if (propParam) {
+        const found = properties.find((p) => p.id === propParam);
+        if (found) {
+          setSelectedPropertyId(found.id);
+          applyPropertyDefaults(found);
+          setShowModal(true);
+        }
+      }
+    }
+  }, [properties]);
+
   const handleOpenAddModal = () => {
     const defaultProp = properties[0];
     if (defaultProp) {

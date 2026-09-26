@@ -229,9 +229,6 @@ export default function PropertyDetailPage() {
         ) {
           return true;
         }
-        if (t.unitId && propertyUnits.some((u) => u.id === t.unitId)) {
-          return true;
-        }
         return false;
       })
     : [];
@@ -341,6 +338,13 @@ export default function PropertyDetailPage() {
         </Link>
 
         <div className="flex items-center gap-2">
+          <Link
+            href={`/app/tenants?propertyId=${property?.id}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Ajouter un locataire</span>
+          </Link>
           <button
             type="button"
             onClick={() => handleOpenImageChangeModal(property)}

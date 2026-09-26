@@ -274,9 +274,6 @@ export default function PropertiesPage() {
         ) {
           return true;
         }
-        if (t.unitId && activePropertyUnits.some((u) => u.id === t.unitId)) {
-          return true;
-        }
         return false;
       })
     : [];
@@ -1293,6 +1290,14 @@ export default function PropertiesPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <Link
+                  href={`/app/tenants?propertyId=${selectedPropertyForTenants.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                  title="Ajouter un locataire dans ce bien"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Ajouter un locataire</span>
+                </Link>
                 <button
                   type="button"
                   onClick={() => handleOpenEditModal(selectedPropertyForTenants)}
