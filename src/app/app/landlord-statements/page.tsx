@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import {
   Calendar,
@@ -52,6 +52,8 @@ interface MonthStoreData {
   encaissements: EncaissementRow[];
   depenses: DepenseRow[];
   versement?: VersementRecord;
+  deletedEncIds?: string[];
+  deletedDepIds?: string[];
   isCustomized?: boolean;
 }
 
@@ -77,15 +79,41 @@ export default function LandlordStatementsPage() {
     leases,
     payments,
     expenses,
-    organization
+    organization,
+    addExpense,
+    deleteExpense,
+    deletePayment
   } = useSunuGestion();
 
-  // Active Month: default to "Septembre"
-  const [selectedMonth, setSelectedMonth] = useState<string>('Septembre');
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  // Active Month: persisted in localStorage so refresh never loses the month!
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sunu_landlord_active_month');
+        if (saved && MONTHS_LIST.includes(saved)) return saved;
+      } catch (e) {}
+    }
+    return 'Septembre';
+  });
 
-  // Selected Owner: default to Yangouba Barry (or first owner)
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sunu_landlord_active_year');
+        if (saved) return Number(saved) || 2026;
+      } catch (e) {}
+    }
+    return 2026;
+  });
+
+  // Selected Owner: persisted in localStorage so refresh never loses the landlord!
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sunu_landlord_active_owner');
+        if (saved) return saved;
+      } catch (e) {}
+    }
     const barry = owners.find(
       (o) => o.lastName?.toLowerCase().includes('barry') || o.firstName?.toLowerCase().includes('yangouba')
     );
@@ -98,9 +126,27 @@ export default function LandlordStatementsPage() {
       const barry = owners.find(
         (o) => o.lastName?.toLowerCase().includes('barry') || o.firstName?.toLowerCase().includes('yangouba')
       );
-      setSelectedOwnerId(barry ? barry.id : owners[0].id);
+      const newId = barry ? barry.id : owners[0].id;
+      setSelectedOwnerId(newId);
+      try {
+        localStorage.setItem('sunu_landlord_active_owner', newId);
+      } catch (e) {}
     }
   }, [owners, selectedOwnerId]);
+
+  const handleSelectMonth = (m: string) => {
+    setSelectedMonth(m);
+    try {
+      localStorage.setItem('sunu_landlord_active_month', m);
+    } catch (e) {}
+  };
+
+  const handleSelectOwner = (id: string) => {
+    setSelectedOwnerId(id);
+    try {
+      localStorage.setItem('sunu_landlord_active_owner', id);
+    } catch (e) {}
+  };
 
   const currentOwner = useMemo(() => {
     return owners.find((o) => o.id === selectedOwnerId) || owners[0] || {
@@ -163,10 +209,19 @@ export default function LandlordStatementsPage() {
   const [versNotes, setVersNotes] = useState('');
   const [versStatus, setVersStatus] = useState<'VERSÉ' | 'PARTIEL' | 'EN_ATTENTE'>('VERSÉ');
 
-  // Persistence: Custom added & modified rows storage per owner-month-year
-  const [isHydrated, setIsHydrated] = useState(false);
+  // Persistence: Direct lazy initialization from localStorage
   const [manualStore, setManualStore] = useState<Record<string, MonthStoreData>>(() => {
-    // Default initial template data for Yangouba Barry on JUILLET 2026
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sunu_landlord_statements_store_v5');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+    }
+
+    // Default template data for Yangouba Barry on JUILLET 2026
     const yangoubaJuilletEnc: EncaissementRow[] = [
       { id: 'yj-1', date: '03/08/2026', pieceNumber: '253', designation: 'Studio RDC (Août)', montantHT: 110000, teomAmount: 3960, tvaAmount: 0, tvlAmount: 3040 },
       { id: 'yj-2', date: '05/08/2026', pieceNumber: '254', designation: 'Appartement 2eme gauche', montantHT: 175000, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
@@ -208,44 +263,25 @@ export default function LandlordStatementsPage() {
     };
   });
 
-  // Load from localStorage on mount
+  // Save to localStorage whenever manualStore updates
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('sunu_landlord_statements_store_v4');
-      if (saved) {
-        setManualStore(JSON.parse(saved));
-      }
+      localStorage.setItem('sunu_landlord_statements_store_v5', JSON.stringify(manualStore));
     } catch (e) {
       console.error(e);
     }
-    setIsHydrated(true);
-  }, []);
-
-  // Save to localStorage
-  useEffect(() => {
-    if (isHydrated) {
-      try {
-        localStorage.setItem('sunu_landlord_statements_store_v4', JSON.stringify(manualStore));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [manualStore, isHydrated]);
+  }, [manualStore]);
 
   const storeKey = useMemo(() => {
     const isBarry = currentOwner.firstName?.toLowerCase().includes('yangouba') || currentOwner.lastName?.toLowerCase().includes('barry');
     return `${isBarry ? 'yangouba' : currentOwner.id}-${selectedMonth}-${selectedYear}`;
   }, [currentOwner, selectedMonth, selectedYear]);
 
-  // Compute live data merged with store
+  // Compute live data merged with store and deleted items tracking
   const { currentEncaissements, currentDepenses } = useMemo(() => {
     const saved = manualStore[storeKey];
-    if (saved && saved.isCustomized) {
-      return {
-        currentEncaissements: saved.encaissements || [],
-        currentDepenses: saved.depenses || []
-      };
-    }
+    const deletedEncSet = new Set(saved?.deletedEncIds || []);
+    const deletedDepSet = new Set(saved?.deletedDepIds || []);
 
     const manualEnc = saved?.encaissements || [];
     const manualDep = saved?.depenses || [];
@@ -303,9 +339,34 @@ export default function LandlordStatementsPage() {
       montant: Number(e.amountFCFA) || 0
     }));
 
+    // Merge manual and live while excluding deleted IDs
+    const encMap = new Map<string, EncaissementRow>();
+    manualEnc.forEach((item) => {
+      if (!deletedEncSet.has(item.id)) {
+        encMap.set(item.id, item);
+      }
+    });
+    liveEncRows.forEach((item) => {
+      if (!deletedEncSet.has(item.id) && !encMap.has(item.id)) {
+        encMap.set(item.id, item);
+      }
+    });
+
+    const depMap = new Map<string, DepenseRow>();
+    manualDep.forEach((item) => {
+      if (!deletedDepSet.has(item.id)) {
+        depMap.set(item.id, item);
+      }
+    });
+    liveDepRows.forEach((item) => {
+      if (!deletedDepSet.has(item.id) && !depMap.has(item.id)) {
+        depMap.set(item.id, item);
+      }
+    });
+
     return {
-      currentEncaissements: [...manualEnc, ...liveEncRows],
-      currentDepenses: [...manualDep, ...liveDepRows]
+      currentEncaissements: Array.from(encMap.values()),
+      currentDepenses: Array.from(depMap.values())
     };
   }, [manualStore, storeKey, properties, currentOwner, payments, expenses, leases, selectedMonth, selectedYear]);
 
@@ -377,46 +438,68 @@ export default function LandlordStatementsPage() {
       tvlAmount: Number(encTvl)
     };
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: [...currentEncaissements, newRow],
-        depenses: currentDepenses,
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: [...currentEncaissements, newRow],
+          depenses: currentDepenses,
+          isCustomized: true
+        }
+      };
+    });
 
     setShowAddEncForm(false);
     setEncDesignation('');
-    setNotificationMsg(`Encaissement de ${Number(encMontantHT).toLocaleString('fr-FR')} CFA ajouté !`);
+    setNotificationMsg(`Encaissement de ${Number(encMontantHT).toLocaleString('fr-FR')} CFA enregistré avec succès !`);
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   // ADD DÉPENSE
   const handleSaveDepense = (e: React.FormEvent) => {
     e.preventDefault();
+    const newId = `dep-${Date.now()}`;
     const newRow: DepenseRow = {
-      id: `dep-${Date.now()}`,
+      id: newId,
       date: depDate,
       pieceNumber: depPiece,
       designation: depDesignation || 'Dépense / Entretien',
       montant: Number(depMontant)
     };
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: currentEncaissements,
-        depenses: [...currentDepenses, newRow],
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    // Save in manual store
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: currentEncaissements,
+          depenses: [...currentDepenses, newRow],
+          isCustomized: true
+        }
+      };
+    });
+
+    // Also add to global app expenses so it persists across entire system
+    const matchedProp = properties.find((p) => p.ownerId === currentOwner.id) || properties[0];
+    addExpense({
+      agencyId: 'org-1',
+      propertyId: matchedProp?.id || 'prop-1',
+      propertyName: matchedProp?.name || `${currentOwner.firstName} ${currentOwner.lastName}`,
+      category: 'ENTRETIEN',
+      description: depDesignation || 'Dépense / Entretien',
+      amountFCFA: Number(depMontant),
+      date: depDate,
+      receiptRef: depPiece || undefined,
+      vendorName: 'Prestataire'
+    });
 
     setShowAddDepForm(false);
     setDepDesignation('');
-    setNotificationMsg(`Dépense de ${Number(depMontant).toLocaleString('fr-FR')} CFA ajoutée !`);
+    setNotificationMsg(`Dépense de ${Number(depMontant).toLocaleString('fr-FR')} CFA enregistrée avec succès !`);
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
@@ -452,15 +535,18 @@ export default function LandlordStatementsPage() {
         : r
     );
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: updatedList,
-        depenses: currentDepenses,
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: updatedList,
+          depenses: currentDepenses,
+          isCustomized: true
+        }
+      };
+    });
 
     setEditingEncRow(null);
     setNotificationMsg("Ligne d'encaissement modifiée avec succès !");
@@ -472,15 +558,26 @@ export default function LandlordStatementsPage() {
     if (!confirm("Voulez-vous vraiment supprimer cet encaissement ?")) return;
     const updatedList = currentEncaissements.filter((r) => r.id !== id);
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: updatedList,
-        depenses: currentDepenses,
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      const prevDeleted = prevData.deletedEncIds || [];
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: updatedList,
+          depenses: currentDepenses,
+          deletedEncIds: [...prevDeleted, id],
+          isCustomized: true
+        }
+      };
+    });
+
+    // If it's a live payment from context, delete from global payments too
+    if (id.startsWith('live-pay-')) {
+      const realPayId = id.replace('live-pay-', '');
+      deletePayment(realPayId);
+    }
 
     if (editingEncRow && editingEncRow.id === id) {
       setEditingEncRow(null);
@@ -515,15 +612,18 @@ export default function LandlordStatementsPage() {
         : d
     );
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: currentEncaissements,
-        depenses: updatedList,
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: currentEncaissements,
+          depenses: updatedList,
+          isCustomized: true
+        }
+      };
+    });
 
     setEditingDepRow(null);
     setNotificationMsg('Dépense modifiée avec succès !');
@@ -535,15 +635,26 @@ export default function LandlordStatementsPage() {
     if (!confirm('Voulez-vous vraiment supprimer cette dépense ?')) return;
     const updatedList = currentDepenses.filter((d) => d.id !== id);
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: currentEncaissements,
-        depenses: updatedList,
-        versement: prev[storeKey]?.versement,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      const prevDeleted = prevData.deletedDepIds || [];
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: currentEncaissements,
+          depenses: updatedList,
+          deletedDepIds: [...prevDeleted, id],
+          isCustomized: true
+        }
+      };
+    });
+
+    // If it's a live expense from context, delete from global expenses too
+    if (id.startsWith('live-exp-')) {
+      const realExpId = id.replace('live-exp-', '');
+      deleteExpense(realExpId);
+    }
 
     if (editingDepRow && editingDepRow.id === id) {
       setEditingDepRow(null);
@@ -589,15 +700,19 @@ export default function LandlordStatementsPage() {
       status: versStatus
     };
 
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: currentEncaissements,
-        depenses: currentDepenses,
-        versement: versementData,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: currentEncaissements,
+          depenses: currentDepenses,
+          versement: versementData,
+          isCustomized: true
+        }
+      };
+    });
 
     setIsVersementModalOpen(false);
     setNotificationMsg(`Versement de ${Number(versAmount).toLocaleString('fr-FR')} CFA enregistré avec succès !`);
@@ -607,15 +722,19 @@ export default function LandlordStatementsPage() {
   // DELETE VERSEMENT
   const handleDeleteVersement = () => {
     if (!confirm('Voulez-vous supprimer ce versement ?')) return;
-    setManualStore((prev) => ({
-      ...prev,
-      [storeKey]: {
-        encaissements: currentEncaissements,
-        depenses: currentDepenses,
-        versement: undefined,
-        isCustomized: true
-      }
-    }));
+    setManualStore((prev) => {
+      const prevData = prev[storeKey] || { encaissements: [], depenses: [] };
+      return {
+        ...prev,
+        [storeKey]: {
+          ...prevData,
+          encaissements: currentEncaissements,
+          depenses: currentDepenses,
+          versement: undefined,
+          isCustomized: true
+        }
+      };
+    });
     setIsVersementModalOpen(false);
     setNotificationMsg('Versement supprimé.');
     setTimeout(() => setNotificationMsg(null), 3000);
@@ -725,7 +844,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
             </span>
             <select
               value={selectedOwnerId}
-              onChange={(e) => setSelectedOwnerId(e.target.value)}
+              onChange={(e) => handleSelectOwner(e.target.value)}
               className="text-xs font-black bg-blue-50 border-2 border-blue-600 text-blue-900 rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
             >
               {owners.map((o) => (
@@ -859,7 +978,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setSelectedMonth(m)}
+                  onClick={() => handleSelectMonth(m)}
                   className={`py-1.5 px-1 text-center rounded-lg text-xs font-black transition-all cursor-pointer border ${
                     isSelected
                       ? 'bg-blue-600 text-white border-blue-600 shadow-xs scale-102 ring-2 ring-blue-400/40'

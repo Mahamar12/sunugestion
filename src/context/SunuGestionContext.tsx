@@ -1623,10 +1623,21 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       }
       const cachedPayments = localStorage.getItem('sunu_payments');
       if (cachedPayments !== null) {
-        const parsedPayments = JSON.parse(cachedPayments);
-        if (Array.isArray(parsedPayments)) {
-          setPayments(parsedPayments);
-        }
+        try {
+          const parsedPayments = JSON.parse(cachedPayments);
+          if (Array.isArray(parsedPayments)) {
+            setPayments(parsedPayments);
+          }
+        } catch (e) {}
+      }
+      const cachedExpenses = localStorage.getItem('sunu_expenses');
+      if (cachedExpenses !== null) {
+        try {
+          const parsedExpenses = JSON.parse(cachedExpenses);
+          if (Array.isArray(parsedExpenses)) {
+            setExpenses(parsedExpenses);
+          }
+        } catch (e) {}
       }
       const cachedVendors = localStorage.getItem('sunu_vendors');
       let deletedVendorIds: string[] = [];
@@ -1737,8 +1748,40 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
             } catch (e) {}
           }
         }
-        if (pay && pay.length > 0) setPayments(pay);
-        if (exp && exp.length > 0) setExpenses(exp);
+        if (pay && Array.isArray(pay)) {
+          const cachedRaw = typeof window !== 'undefined' ? localStorage.getItem('sunu_payments') : null;
+          let localPayments: Payment[] = [];
+          try {
+            if (cachedRaw) localPayments = JSON.parse(cachedRaw);
+          } catch (e) {}
+          const payMap = new Map<string, Payment>();
+          pay.forEach((p) => payMap.set(p.id, p));
+          localPayments.forEach((p) => payMap.set(p.id, p));
+          const mergedPay = Array.from(payMap.values());
+          if (mergedPay.length > 0) {
+            setPayments(mergedPay);
+            try {
+              localStorage.setItem('sunu_payments', JSON.stringify(mergedPay));
+            } catch (e) {}
+          }
+        }
+        if (exp && Array.isArray(exp)) {
+          const cachedRaw = typeof window !== 'undefined' ? localStorage.getItem('sunu_expenses') : null;
+          let localExpenses: Expense[] = [];
+          try {
+            if (cachedRaw) localExpenses = JSON.parse(cachedRaw);
+          } catch (e) {}
+          const expMap = new Map<string, Expense>();
+          exp.forEach((e) => expMap.set(e.id, e));
+          localExpenses.forEach((e) => expMap.set(e.id, e));
+          const mergedExp = Array.from(expMap.values());
+          if (mergedExp.length > 0) {
+            setExpenses(mergedExp);
+            try {
+              localStorage.setItem('sunu_expenses', JSON.stringify(mergedExp));
+            } catch (e) {}
+          }
+        }
         if (v && Array.isArray(v)) {
           let deletedVendorIds: string[] = [];
           try {
@@ -2891,7 +2934,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       recordedBy: currentUser.name,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setExpenses((prev) => [newExpense, ...prev]);
+    setExpenses((prev) => {
+      const updated = [newExpense, ...prev];
+      try {
+        localStorage.setItem('sunu_expenses', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     addAuditLog('CREATION_DEPENSE', `Dépense de ${newExpense.amountFCFA} FCFA ajoutée (${newExpense.category})`, 'DEPENSE');
 
     const notif: NotificationItem = {
@@ -2915,7 +2964,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     const expToDelete = expenses.find((e) => e.id === expenseId);
     if (!expToDelete) return;
 
-    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+    setExpenses((prev) => {
+      const updated = prev.filter((e) => e.id !== expenseId);
+      try {
+        localStorage.setItem('sunu_expenses', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     addAuditLog('SUPPRESSION_DEPENSE', `Suppression de la dépense ${expToDelete.description}`, 'DEPENSE');
 
     if (SupabaseDbService.isConfigured()) {
