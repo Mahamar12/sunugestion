@@ -1,43 +1,23 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSunuGestion } from '@/context/SunuGestionContext';
-import { PaymentMethod, Owner, Property, Unit, Payment, Expense } from '@/types/sunugestion';
+import { Owner } from '@/types/sunugestion';
 import {
-  Landmark,
-  Receipt,
-  CreditCard,
-  Building2,
   Calendar,
-  Filter,
-  Search,
   Download,
   Printer,
   Share2,
   CheckCircle2,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
-  ExternalLink,
   Plus,
   X,
-  FileText,
-  UserCheck,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  ArrowRight,
-  ShieldCheck,
-  Send,
-  Phone,
-  Table as TableIcon,
-  LayoutGrid,
   FileSpreadsheet,
-  Edit2,
   Trash2,
-  Eye
+  RefreshCw,
+  CreditCard,
+  Building2,
+  Phone,
+  UserCheck
 } from 'lucide-react';
 
 interface EncaissementRow {
@@ -46,9 +26,8 @@ interface EncaissementRow {
   pieceNumber: string;
   designation: string;
   montantHT: number;
-  teomPercent: number; // 3.6%
   teomAmount: number;
-  tvaAmount: number; // 18% for commercial
+  tvaAmount: number;
   tvlAmount: number;
 }
 
@@ -58,7 +37,6 @@ interface DepenseRow {
   pieceNumber: string;
   designation: string;
   montant: number;
-  isRedHighlight?: boolean;
 }
 
 const MONTHS_LIST = [
@@ -84,988 +62,825 @@ export default function LandlordStatementsPage() {
     leases,
     payments,
     expenses,
-    organization,
-    addExpense,
-    recordPayment
+    organization
   } = useSunuGestion();
 
-  // Active Selected Month & Year (Janvier à Décembre de chaque année)
-  const [selectedMonth, setSelectedMonth] = useState<string>('Juillet');
+  // Active Month: default to "Septembre" as requested in user's image
+  const [selectedMonth, setSelectedMonth] = useState<string>('Septembre');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
-  // Selected Owner for the Modal Relevé PDF
-  const [activeOwnerModal, setActiveOwnerModal] = useState<Owner | null>(null);
+  // Selected Owner: default to Yangouba Barry (or first owner)
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>(() => {
+    const barry = owners.find(
+      (o) => o.lastName?.toLowerCase().includes('barry') || o.firstName?.toLowerCase().includes('yangouba')
+    );
+    return barry ? barry.id : (owners[0]?.id || '');
+  });
 
-  // Search & Filter in list view
-  const [searchQuery, setSearchQuery] = useState('');
+  // Ensure selectedOwnerId is valid
+  useEffect(() => {
+    if (owners.length > 0 && (!selectedOwnerId || !owners.some((o) => o.id === selectedOwnerId))) {
+      const barry = owners.find(
+        (o) => o.lastName?.toLowerCase().includes('barry') || o.firstName?.toLowerCase().includes('yangouba')
+      );
+      setSelectedOwnerId(barry ? barry.id : owners[0].id);
+    }
+  }, [owners, selectedOwnerId]);
+
+  const currentOwner = useMemo(() => {
+    return owners.find((o) => o.id === selectedOwnerId) || owners[0] || {
+      id: 'yangouba-barry',
+      firstName: 'Yangouba',
+      lastName: 'Barry',
+      phone: '+221 77 412 88 90',
+      whatsapp: '+221 77 412 88 90',
+      email: 'yangouba.barry@gmail.com',
+      commissionRatePercent: 10,
+    };
+  }, [owners, selectedOwnerId]);
+
+  // Notifications
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Quick Inline Add Forms inside Modal
-  const [showAddEncaissementForm, setShowAddEncaissementForm] = useState(false);
-  const [newEncDate, setNewEncDate] = useState('05/08/2026');
-  const [newEncPiece, setNewEncPiece] = useState('261');
-  const [newEncDesignation, setNewEncDesignation] = useState('');
-  const [newEncMontantHT, setNewEncMontantHT] = useState<number>(150000);
-  const [newEncIsCommercial, setNewEncIsCommercial] = useState(false);
-  const [newEncTVL, setNewEncTVL] = useState<number>(0);
+  // Inline forms
+  const [showAddEncForm, setShowAddEncForm] = useState(false);
+  const [encDate, setEncDate] = useState('05/09/2026');
+  const [encPiece, setEncPiece] = useState('261');
+  const [encDesignation, setEncDesignation] = useState('');
+  const [encMontantHT, setEncMontantHT] = useState<number>(150000);
+  const [encTeom, setEncTeom] = useState<number>(5400);
+  const [encTva, setEncTva] = useState<number>(0);
+  const [encTvl, setEncTvl] = useState<number>(0);
 
-  const [showAddDepenseForm, setShowAddDepenseForm] = useState(false);
-  const [newDepDate, setNewDepDate] = useState('15/08/2026');
-  const [newDepPiece, setNewDepPiece] = useState('');
-  const [newDepDesignation, setNewDepDesignation] = useState('');
-  const [newDepMontant, setNewDepMontant] = useState<number>(25000);
-  const [newDepIsRed, setNewDepIsRed] = useState(false);
+  const [showAddDepForm, setShowAddDepForm] = useState(false);
+  const [depDate, setDepDate] = useState('15/09/2026');
+  const [depPiece, setDepPiece] = useState('');
+  const [depDesignation, setDepDesignation] = useState('');
+  const [depMontant, setDepMontant] = useState<number>(25000);
 
-  // Persistent Custom Rows store for all owners & all months
-  const [customDataStore, setCustomDataStore] = useState<Record<string, {
+  // Modal PDF Preview (Full Sheet Viewer)
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+
+  // Custom added rows storage per owner-month-year
+  const [manualStore, setManualStore] = useState<Record<string, {
     encaissements: EncaissementRow[];
     depenses: DepenseRow[];
-    commissionRate: number;
   }>>(() => {
-    // Exact data from user's image for Yangouba Barry de JUILLET 2026
-    const yangoubaJuilletEncaissements: EncaissementRow[] = [
-      { id: 'e1', date: '03/08/2026', pieceNumber: '253', designation: 'Studio RDC (Août)', montantHT: 110000, teomPercent: 3.6, teomAmount: 3960, tvaAmount: 0, tvlAmount: 3040 },
-      { id: 'e2', date: '05/08/2026', pieceNumber: '254', designation: 'Appartement 2eme gauche', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
-      { id: 'e3', date: '05/08/2026', pieceNumber: '256', designation: 'Appartement 3ème gauche', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
-      { id: 'e4', date: '07/08/2026', pieceNumber: '257', designation: 'Magasin RDC', montantHT: 100000, teomPercent: 3.6, teomAmount: 3600, tvaAmount: 18000, tvlAmount: 2500 },
-      { id: 'e5', date: '07/08/2026', pieceNumber: '258', designation: 'Appartement 2eme droite', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
-      { id: 'e6', date: '10/08/2026', pieceNumber: '259', designation: 'Appartement 4eme gauche', montantHT: 171000, teomPercent: 3.6, teomAmount: 2000, tvaAmount: 0, tvlAmount: 0 },
-      { id: 'e7', date: '11/08/2026', pieceNumber: '260', designation: 'Appartement 1er droite', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
+    // Exact data for Yangouba Barry on JUILLET 2026 from first image
+    const yangoubaJuilletEnc: EncaissementRow[] = [
+      { id: 'yj-1', date: '03/08/2026', pieceNumber: '253', designation: 'Studio RDC (Août)', montantHT: 110000, teomAmount: 3960, tvaAmount: 0, tvlAmount: 3040 },
+      { id: 'yj-2', date: '05/08/2026', pieceNumber: '254', designation: 'Appartement 2eme gauche', montantHT: 175000, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
+      { id: 'yj-3', date: '05/08/2026', pieceNumber: '256', designation: 'Appartement 3ème gauche', montantHT: 175000, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
+      { id: 'yj-4', date: '07/08/2026', pieceNumber: '257', designation: 'Magasin RDC', montantHT: 100000, teomAmount: 3600, tvaAmount: 18000, tvlAmount: 2500 },
+      { id: 'yj-5', date: '07/08/2026', pieceNumber: '258', designation: 'Appartement 2eme droite', montantHT: 175000, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
+      { id: 'yj-6', date: '10/08/2026', pieceNumber: '259', designation: 'Appartement 4eme gauche', montantHT: 171000, teomAmount: 2000, tvaAmount: 0, tvlAmount: 0 },
+      { id: 'yj-7', date: '11/08/2026', pieceNumber: '260', designation: 'Appartement 1er droite', montantHT: 175000, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
     ];
 
-    const yangoubaJuilletDepenses: DepenseRow[] = [
-      { id: 'd1', date: '29/08/2026', pieceNumber: '', designation: 'Achat de madar', montant: 1210 },
-      { id: 'd2', date: '06/08/2026', pieceNumber: '', designation: 'Salaire gardien', montant: 100000 },
-      { id: 'd3', date: '17/08/2026', pieceNumber: '', designation: 'Woyofal Appartement 4eme', montant: 1500 },
-      { id: 'd4', date: '22/08/2026', pieceNumber: '', designation: 'Achat de canon App 3eme droite', montant: 5050 },
-      { id: 'd5', date: '24/08/2026', pieceNumber: '', designation: 'Facture Sonatel', montant: 34900 },
-      { id: 'd6', date: '25/08/2026', pieceNumber: '', designation: "Facture Sen'eau", montant: 80674, isRedHighlight: true },
-      { id: 'd7', date: '27/08/2026', pieceNumber: '', designation: 'Achat de ciment', montant: 250 },
-      { id: 'd8', date: '27/08/2026', pieceNumber: '', designation: "Transport + main d'œuvre électricien (branchement courant App 3eme)", montant: 10100 },
-      { id: 'd9', date: '27/08/2026', pieceNumber: '', designation: 'Main d’œuvre demontage clim App 3eme droite', montant: 20200 },
-      { id: 'd10', date: '27/08/2026', pieceNumber: '', designation: 'Transport clim App 3eme', montant: 2020 },
+    const yangoubaJuilletDep: DepenseRow[] = [
+      { id: 'yjd-1', date: '29/08/2026', pieceNumber: '', designation: 'Achat de madar', montant: 1210 },
+      { id: 'yjd-2', date: '06/08/2026', pieceNumber: '', designation: 'Salaire gardien', montant: 100000 },
+      { id: 'yjd-3', date: '17/08/2026', pieceNumber: '', designation: 'Woyofal Appartement 4eme', montant: 1500 },
+      { id: 'yjd-4', date: '22/08/2026', pieceNumber: '', designation: 'Achat de canon App 3eme droite', montant: 5050 },
+      { id: 'yjd-5', date: '24/08/2026', pieceNumber: '', designation: 'Facture Sonatel', montant: 34900 },
+      { id: 'yjd-6', date: '25/08/2026', pieceNumber: '', designation: "Facture Sen'eau", montant: 80674 },
+      { id: 'yjd-7', date: '27/08/2026', pieceNumber: '', designation: 'Achat de ciment', montant: 250 },
+      { id: 'yjd-8', date: '27/08/2026', pieceNumber: '', designation: "Transport + main d'œuvre électricien (branchement courant App 3eme)", montant: 10100 },
+      { id: 'yjd-9', date: '27/08/2026', pieceNumber: '', designation: 'Main d’œuvre demontage clim App 3eme droite', montant: 20200 },
+      { id: 'yjd-10', date: '27/08/2026', pieceNumber: '', designation: 'Transport clim App 3eme', montant: 2020 },
     ];
 
     return {
       'yangouba-Juillet-2026': {
-        encaissements: yangoubaJuilletEncaissements,
-        depenses: yangoubaJuilletDepenses,
-        commissionRate: 10
+        encaissements: yangoubaJuilletEnc,
+        depenses: yangoubaJuilletDep
       }
     };
   });
 
-  // Helper to get owner's data for a given month & year
-  const getSheetDataForOwner = (owner: Owner, month: string, year: number) => {
-    const isBarry = owner.firstName?.toLowerCase().includes('yangouba') || owner.lastName?.toLowerCase().includes('barry');
-    const storeKey = `${isBarry ? 'yangouba' : owner.id}-${month}-${year}`;
+  const storeKey = useMemo(() => {
+    const isBarry = currentOwner.firstName?.toLowerCase().includes('yangouba') || currentOwner.lastName?.toLowerCase().includes('barry');
+    return `${isBarry ? 'yangouba' : currentOwner.id}-${selectedMonth}-${selectedYear}`;
+  }, [currentOwner, selectedMonth, selectedYear]);
 
-    // If custom data exists in store
-    if (customDataStore[storeKey]) {
-      return customDataStore[storeKey];
-    }
+  // Compute live data:
+  // "Dès que je fais un encaissement, ça doit figurer ici. Dès que je fais une dépense, ça doit figurer sur ce fichier."
+  const { currentEncaissements, currentDepenses } = useMemo(() => {
+    // 1. Check manual store first
+    const saved = manualStore[storeKey];
+    const manualEnc = saved?.encaissements || [];
+    const manualDep = saved?.depenses || [];
 
-    // 1. Identify real properties of this landlord
+    // 2. Extract live payments from app state for this owner & month
     const ownerProperties = properties.filter(
       (p) =>
-        p.ownerId === owner.id ||
-        (p.ownerName && `${owner.firstName} ${owner.lastName}`.trim().toLowerCase() === p.ownerName.trim().toLowerCase())
+        p.ownerId === currentOwner.id ||
+        (p.ownerName && `${currentOwner.firstName} ${currentOwner.lastName}`.trim().toLowerCase() === p.ownerName.trim().toLowerCase())
     );
-    const ownerPropertyIds = new Set(ownerProperties.map((p) => p.id));
     const ownerPropertyNames = new Set(ownerProperties.map((p) => p.name.trim().toLowerCase()));
+    const ownerPropertyIds = new Set(ownerProperties.map((p) => p.id));
 
-    // 2. Identify real units
-    const ownerUnits = units.filter((u) => u.ownerId === owner.id || ownerPropertyIds.has(u.propertyId));
+    const monthNum = String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0');
 
-    // 3. Find real live payments for this owner and this month
-    const monthIndex = MONTHS_LIST.indexOf(month) + 1;
-    const monthNumStr = String(monthIndex).padStart(2, '0');
-
+    // Live payments matching this landlord and month
     const livePayments = payments.filter((pay) => {
-      const matchOwner = (pay.propertyName && ownerPropertyNames.has(pay.propertyName.trim().toLowerCase())) ||
-        leases.some((l) => l.id === pay.leaseId && (l.ownerId === owner.id || ownerPropertyIds.has(l.propertyId)));
+      const matchOwner =
+        (pay.propertyName && ownerPropertyNames.has(pay.propertyName.trim().toLowerCase())) ||
+        leases.some((l) => l.id === pay.leaseId && (l.ownerId === currentOwner.id || ownerPropertyIds.has(l.propertyId)));
 
-      const matchMonth =
-        (pay.periodMonthYear && pay.periodMonthYear.toLowerCase().includes(month.toLowerCase())) ||
-        (pay.date && (pay.date.includes(`-${monthNumStr}-`) || pay.date.includes(`/${monthNumStr}/`)));
+      const matchPeriod =
+        (pay.periodMonthYear && pay.periodMonthYear.toLowerCase().includes(selectedMonth.toLowerCase())) ||
+        (pay.date && (pay.date.includes(`-${monthNum}-`) || pay.date.includes(`/${monthNum}/`)));
 
-      return matchOwner && matchMonth;
+      return matchOwner && matchPeriod;
     });
 
-    // 4. Find real live expenses for this owner and this month
-    const liveExpenses = expenses.filter((exp) => {
-      const matchOwner = ownerPropertyIds.has(exp.propertyId) ||
-        (exp.propertyName && ownerPropertyNames.has(exp.propertyName.trim().toLowerCase()));
-
-      const matchMonth = exp.date && (exp.date.includes(`-${monthNumStr}-`) || exp.date.includes(`/${monthNumStr}/`));
-      return matchOwner && matchMonth;
-    });
-
-    // Convert live payments to EncaissementRows
-    let encaissements: EncaissementRow[] = livePayments.map((p, idx) => {
+    const liveEncRows: EncaissementRow[] = livePayments.map((p, idx) => {
       const ht = Number(p.amountFCFA) || 0;
-      const teom = Math.round(ht * 0.036);
       return {
         id: `live-pay-${p.id}`,
-        date: p.date || `05/${monthNumStr}/${year}`,
-        pieceNumber: p.receiptNumber || String(250 + idx + 1),
+        date: p.date || `05/${monthNum}/${selectedYear}`,
+        pieceNumber: p.receiptNumber || String(260 + idx + 1),
         designation: `${p.tenantName} - ${p.propertyName} (${p.unitNumber || 'Lot'})`,
         montantHT: ht,
-        teomPercent: 3.6,
-        teomAmount: teom,
+        teomAmount: Math.round(ht * 0.036),
         tvaAmount: 0,
         tvlAmount: 0
       };
     });
 
-    // If no live payments yet for this specific month, default to owner's registered lots
-    if (encaissements.length === 0) {
-      encaissements = ownerUnits.slice(0, 7).map((u, idx) => {
-        const ht = u.rentFCFA || 150000;
-        const teom = Math.round(ht * 0.036);
-        const isShop = u.type === 'MAGASIN' || u.type === 'LOCAL_COMMERCIAL' || u.type === 'BOUTIQUE';
-        const tva = isShop ? Math.round(ht * 0.18) : 0;
-        return {
-          id: `default-u-${u.id}-${idx}`,
-          date: `05/${monthNumStr}/${year}`,
-          pieceNumber: String(250 + idx + 1),
-          designation: `${u.type === 'APPARTEMENT' ? 'Appartement' : u.type} ${u.unitNumber} (${u.propertyName})`,
-          montantHT: ht,
-          teomPercent: 3.6,
-          teomAmount: teom,
-          tvaAmount: tva,
-          tvlAmount: idx === 0 ? 3040 : (idx === 2 || idx === 4 ? 4000 : 0)
-        };
-      });
-    }
+    // Live expenses matching this landlord and month
+    const liveExpenses = expenses.filter((exp) => {
+      const matchOwner =
+        ownerPropertyIds.has(exp.propertyId) ||
+        (exp.propertyName && ownerPropertyNames.has(exp.propertyName.trim().toLowerCase()));
 
-    // Convert live expenses to DepenseRows
-    let depenses: DepenseRow[] = liveExpenses.map((e) => ({
+      const matchMonth = exp.date && (exp.date.includes(`-${monthNum}-`) || exp.date.includes(`/${monthNum}/`));
+      return matchOwner && matchMonth;
+    });
+
+    const liveDepRows: DepenseRow[] = liveExpenses.map((e) => ({
       id: `live-exp-${e.id}`,
       date: e.date,
       pieceNumber: e.receiptRef || '',
       designation: `${e.description} (${e.vendorName})`,
-      montant: Number(e.amountFCFA) || 0,
-      isRedHighlight: e.category === 'EAU' || e.description.toLowerCase().includes("sen'eau")
+      montant: Number(e.amountFCFA) || 0
     }));
 
-    if (depenses.length === 0) {
-      depenses = [
-        { id: `d-base-1`, date: `06/${monthNumStr}/${year}`, pieceNumber: '', designation: 'Salaire gardien & surveillance', montant: 80000 },
-        { id: `d-base-2`, date: `17/${monthNumStr}/${year}`, pieceNumber: '', designation: 'Woyofal électricité minuterie', montant: 1500 },
-        { id: `d-base-3`, date: `24/${monthNumStr}/${year}`, pieceNumber: '', designation: 'Facture Sonatel fibre agence', montant: 34900 },
-        { id: `d-base-4`, date: `25/${monthNumStr}/${year}`, pieceNumber: '', designation: "Facture Sen'eau", montant: 65400, isRedHighlight: true }
-      ];
-    }
+    // Merge manual entries and live entries
+    const mergedEnc = [...manualEnc, ...liveEncRows];
+    const mergedDep = [...manualDep, ...liveDepRows];
 
     return {
-      encaissements,
-      depenses,
-      commissionRate: owner.commissionRatePercent ?? 10
+      currentEncaissements: mergedEnc,
+      currentDepenses: mergedDep
     };
-  };
+  }, [manualStore, storeKey, properties, currentOwner, payments, expenses, leases, selectedMonth, selectedYear]);
 
-  // Calculations for current active modal owner
-  const modalSheetData = useMemo(() => {
-    if (!activeOwnerModal) return null;
-    return getSheetDataForOwner(activeOwnerModal, selectedMonth, selectedYear);
-  }, [activeOwnerModal, selectedMonth, selectedYear, customDataStore, payments, expenses, units, properties]);
-
+  // Calculations for Totals
   const totalMontantHT = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return modalSheetData.encaissements.reduce((acc, r) => acc + (r.montantHT || 0), 0);
-  }, [modalSheetData]);
+    return currentEncaissements.reduce((acc, r) => acc + (r.montantHT || 0), 0);
+  }, [currentEncaissements]);
 
   const totalTEOM = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return modalSheetData.encaissements.reduce((acc, r) => acc + (r.teomAmount || 0), 0);
-  }, [modalSheetData]);
+    return currentEncaissements.reduce((acc, r) => acc + (r.teomAmount || 0), 0);
+  }, [currentEncaissements]);
 
   const totalTVA = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return modalSheetData.encaissements.reduce((acc, r) => acc + (r.tvaAmount || 0), 0);
-  }, [modalSheetData]);
+    return currentEncaissements.reduce((acc, r) => acc + (r.tvaAmount || 0), 0);
+  }, [currentEncaissements]);
 
   const totalTVL = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return modalSheetData.encaissements.reduce((acc, r) => acc + (r.tvlAmount || 0), 0);
-  }, [modalSheetData]);
+    return currentEncaissements.reduce((acc, r) => acc + (r.tvlAmount || 0), 0);
+  }, [currentEncaissements]);
 
-  const totalLocationTeomTva = useMemo(() => {
+  // Red row: "Location+ TEOM" (as requested in the user's latest image)
+  const totalLocationPlusTeom = useMemo(() => {
     return totalMontantHT + totalTEOM + totalTVA + totalTVL;
   }, [totalMontantHT, totalTEOM, totalTVA, totalTVL]);
 
+  // Total Dépenses brutes
   const totalRawDepenses = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return modalSheetData.depenses.reduce((acc, r) => acc + (r.montant || 0), 0);
-  }, [modalSheetData]);
+    return currentDepenses.reduce((acc, r) => acc + (r.montant || 0), 0);
+  }, [currentDepenses]);
 
-  const commissionAgence = useMemo(() => {
-    if (!modalSheetData) return 0;
-    return Math.round(totalMontantHT * (modalSheetData.commissionRate / 100));
-  }, [totalMontantHT, modalSheetData]);
+  // Commission Agence 10%
+  const commissionRate = currentOwner.commissionRatePercent ?? 10;
+  const commissionAmount = useMemo(() => {
+    if (totalMontantHT === 0) return 0;
+    return Math.round(totalMontantHT * (commissionRate / 100));
+  }, [totalMontantHT, commissionRate]);
 
-  const totalDepensesWithCommission = useMemo(() => {
-    return totalRawDepenses + commissionAgence;
-  }, [totalRawDepenses, commissionAgence]);
+  // Total Dépenses = Dépenses + Commission
+  const totalDepenses = useMemo(() => {
+    return totalRawDepenses + commissionAmount;
+  }, [totalRawDepenses, commissionAmount]);
 
+  // Montant à verser = Location+TEOM - Total Dépenses
   const montantAVerser = useMemo(() => {
-    return Math.max(0, totalLocationTeomTva - totalDepensesWithCommission);
-  }, [totalLocationTeomTva, totalDepensesWithCommission]);
+    if (totalLocationPlusTeom === 0 && totalDepenses === 0) return 0;
+    return Math.max(0, totalLocationPlusTeom - totalDepenses);
+  }, [totalLocationPlusTeom, totalDepenses]);
 
-  // Handle adding encaissement to current sheet
-  const handleSaveNewEncaissement = (e: React.FormEvent) => {
+  // Add Encaissement
+  const handleSaveEncaissement = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOwnerModal || !modalSheetData) return;
-
-    const isBarry = activeOwnerModal.firstName?.toLowerCase().includes('yangouba') || activeOwnerModal.lastName?.toLowerCase().includes('barry');
-    const storeKey = `${isBarry ? 'yangouba' : activeOwnerModal.id}-${selectedMonth}-${selectedYear}`;
-
-    const teom = Math.round(newEncMontantHT * 0.036);
-    const tva = newEncIsCommercial ? Math.round(newEncMontantHT * 0.18) : 0;
-
     const newRow: EncaissementRow = {
       id: `enc-${Date.now()}`,
-      date: newEncDate,
-      pieceNumber: newEncPiece,
-      designation: newEncDesignation || 'Loyer Logement',
-      montantHT: Number(newEncMontantHT),
-      teomPercent: 3.6,
-      teomAmount: teom,
-      tvaAmount: tva,
-      tvlAmount: Number(newEncTVL) || 0
+      date: encDate,
+      pieceNumber: encPiece,
+      designation: encDesignation || 'Logement / Loyer',
+      montantHT: Number(encMontantHT),
+      teomAmount: Number(encTeom),
+      tvaAmount: Number(encTva),
+      tvlAmount: Number(encTvl)
     };
 
-    setCustomDataStore((prev) => ({
+    setManualStore((prev) => ({
       ...prev,
       [storeKey]: {
-        ...modalSheetData,
-        encaissements: [...modalSheetData.encaissements, newRow]
+        encaissements: [...(prev[storeKey]?.encaissements || []), newRow],
+        depenses: prev[storeKey]?.depenses || []
       }
     }));
 
-    setShowAddEncaissementForm(false);
-    setNewEncDesignation('');
-    setNotificationMsg(`Encaissement de ${newEncMontantHT.toLocaleString('fr-FR')} CFA ajouté au bordereau !`);
+    setShowAddEncForm(false);
+    setEncDesignation('');
+    setNotificationMsg(`Encaissement de ${Number(encMontantHT).toLocaleString('fr-FR')} CFA ajouté au bordereau !`);
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  // Handle adding depense to current sheet
-  const handleSaveNewDepense = (e: React.FormEvent) => {
+  // Add Depense
+  const handleSaveDepense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOwnerModal || !modalSheetData) return;
-
-    const isBarry = activeOwnerModal.firstName?.toLowerCase().includes('yangouba') || activeOwnerModal.lastName?.toLowerCase().includes('barry');
-    const storeKey = `${isBarry ? 'yangouba' : activeOwnerModal.id}-${selectedMonth}-${selectedYear}`;
-
     const newRow: DepenseRow = {
       id: `dep-${Date.now()}`,
-      date: newDepDate,
-      pieceNumber: newDepPiece,
-      designation: newDepDesignation || 'Dépense / Travaux',
-      montant: Number(newDepMontant),
-      isRedHighlight: newDepIsRed
+      date: depDate,
+      pieceNumber: depPiece,
+      designation: depDesignation || 'Dépense / Entretien',
+      montant: Number(depMontant)
     };
 
-    setCustomDataStore((prev) => ({
+    setManualStore((prev) => ({
       ...prev,
       [storeKey]: {
-        ...modalSheetData,
-        depenses: [...modalSheetData.depenses, newRow]
+        encaissements: prev[storeKey]?.encaissements || [],
+        depenses: [...(prev[storeKey]?.depenses || []), newRow]
       }
     }));
 
-    setShowAddDepenseForm(false);
-    setNewDepDesignation('');
-    setNotificationMsg(`Dépense de ${newDepMontant.toLocaleString('fr-FR')} CFA ajoutée au bordereau !`);
+    setShowAddDepForm(false);
+    setDepDesignation('');
+    setNotificationMsg(`Dépense de ${Number(depMontant).toLocaleString('fr-FR')} CFA ajoutée au bordereau !`);
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  // Export CSV matching sheet
-  const handleExportCSV = () => {
-    if (!activeOwnerModal || !modalSheetData) return;
+  // Clear or reset month
+  const handleResetMonth = () => {
+    setManualStore((prev) => {
+      const copy = { ...prev };
+      delete copy[storeKey];
+      return copy;
+    });
+    setNotificationMsg(`Mois de ${selectedMonth} réinitialisé.`);
+    setTimeout(() => setNotificationMsg(null), 3000);
+  };
 
-    const title = `Situation ${activeOwnerModal.firstName} ${activeOwnerModal.lastName} de ${selectedMonth.toUpperCase()} ${selectedYear}`;
+  // Export CSV
+  const handleExportCSV = () => {
+    const title = `Situation ${currentOwner.firstName} ${currentOwner.lastName} de ${selectedMonth} ${selectedYear}`;
     let csv = `${title}\n\n`;
 
-    csv += 'ENCAISSEMENTS\n';
-    csv += 'Dates,N° Pièce,Désignations,Montants HT,TEOM 3.6%,TVA 18%,TVL\n';
-    modalSheetData.encaissements.forEach((e) => {
+    csv += 'Dates,N° Pièce,Désignations,Montants HT,TEOM,TVA 18%,TVL\n';
+    currentEncaissements.forEach((e) => {
       csv += `"${e.date}","${e.pieceNumber}","${e.designation}",${e.montantHT},${e.teomAmount},${e.tvaAmount},${e.tvlAmount}\n`;
     });
     csv += `Total,,,${totalMontantHT},${totalTEOM},${totalTVA},${totalTVL}\n`;
-    csv += `Location+ TEOM+TVA,,,${totalLocationTeomTva}\n\n`;
+    csv += `Location+ TEOM,,,${totalLocationPlusTeom}\n\n`;
 
-    csv += 'DÉPENSES\n';
     csv += 'Dates,N°Pièce,Dépenses,Montants\n';
-    modalSheetData.depenses.forEach((d) => {
+    currentDepenses.forEach((d) => {
       csv += `"${d.date}","${d.pieceNumber}","${d.designation}",${d.montant}\n`;
     });
-    csv += `Commission Agence ${modalSheetData.commissionRate}%,,,${commissionAgence}\n`;
-    csv += `Total Dépenses,,,${totalDepensesWithCommission}\n`;
+    csv += `Commission Agence ${commissionRate}%,,,${commissionAmount}\n`;
+    csv += `Total Dépenses,,,${totalDepenses}\n`;
     csv += `Montant à verser,,,${montantAVerser}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `releve-situation-${activeOwnerModal.lastName}-${selectedMonth}-${selectedYear}.csv`);
+    link.setAttribute('download', `situation-${currentOwner.lastName}-${selectedMonth}-${selectedYear}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  // WhatsApp share matching sheet
+  // Share WhatsApp
   const handleSendWhatsApp = () => {
-    if (!activeOwnerModal) return;
-    const phone = activeOwnerModal.whatsapp || activeOwnerModal.phone || '';
+    const phone = currentOwner.whatsapp || currentOwner.phone || '';
     const cleanPhone = phone.replace(/[^0-9]/g, '');
 
-    const msg = `*Situation ${activeOwnerModal.firstName} ${activeOwnerModal.lastName} de ${selectedMonth.toUpperCase()} ${selectedYear}*
-ETAT DU COMPTE DE GÉRANCE OFFICIEL
+    const msg = `*Situation ${currentOwner.firstName} ${currentOwner.lastName} de ${selectedMonth} ${selectedYear}*
+ETAT DU COMPTE
 
-📊 *RECAPITULATIF :*
+📊 *ENCAISSEMENTS :*
+• Montants HT : ${totalMontantHT.toLocaleString('fr-FR')} CFA
+• TEOM : ${totalTEOM.toLocaleString('fr-FR')} CFA
+• TVA (18%) : ${totalTVA.toLocaleString('fr-FR')} CFA
+• TVL : ${totalTVL.toLocaleString('fr-FR')} CFA
+👉 *Location+ TEOM : ${totalLocationPlusTeom.toLocaleString('fr-FR')} CFA*
+
+📊 *DÉPENSES :*
+• Dépenses & Travaux : ${totalRawDepenses.toLocaleString('fr-FR')} CFA
+• Commission Agence (${commissionRate}%) : ${commissionAmount.toLocaleString('fr-FR')} CFA
+👉 *Total Dépenses : ${totalDepenses.toLocaleString('fr-FR')} CFA*
+
 ━━━━━━━━━━━━━━━━━━━━
-• Montants Loyers HT : *${totalMontantHT.toLocaleString('fr-FR')} CFA*
-• TEOM (3,6%) : *${totalTEOM.toLocaleString('fr-FR')} CFA*
-• TVA (18%) : *${totalTVA.toLocaleString('fr-FR')} CFA*
-• TVL : *${totalTVL.toLocaleString('fr-FR')} CFA*
+💎 *MONTANT À VERSER : ${montantAVerser.toLocaleString('fr-FR')} CFA*
 ━━━━━━━━━━━━━━━━━━━━
-👉 *Total Encaissé (Location+TEOM+TVA) : ${totalLocationTeomTva.toLocaleString('fr-FR')} CFA*
-━━━━━━━━━━━━━━━━━━━━
-• Total Dépenses & Travaux : *${totalRawDepenses.toLocaleString('fr-FR')} CFA*
-• Commission Agence (${modalSheetData?.commissionRate}%) : *${commissionAgence.toLocaleString('fr-FR')} CFA*
-👉 *Total Dépenses Déductibles : ${totalDepensesWithCommission.toLocaleString('fr-FR')} CFA*
-━━━━━━━━━━━━━━━━━━━━
-💎 *MONTANT NET A VERSER : ${montantAVerser.toLocaleString('fr-FR')} CFA*
-━━━━━━━━━━━━━━━━━━━━
-Document certifié conforme par ${organization?.name || 'SunuGestion Sénégal'}.`;
+Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
 
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // Calculate total empty rows needed to match authentic grid appearance
+  const encEmptyRowsCount = Math.max(12 - currentEncaissements.length, 4);
+  const depEmptyRowsCount = Math.max(10 - currentDepenses.length, 3);
+
   return (
-    <div className="p-3 sm:p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-2 sm:p-5 space-y-4 bg-slate-100 min-h-screen">
       {/* Toast Notification */}
       {notificationMsg && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in no-print">
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in no-print">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{notificationMsg}</span>
         </div>
       )}
 
-      {/* Main Page Header */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-            <Landmark className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Situation des Bailleurs
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                Relevés &amp; Bordereaux Officiels
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Chaque bailleur dispose de son relevé bordereau conforme du mois de <strong>Janvier jusqu'à Décembre</strong>.
-            </p>
-          </div>
-        </div>
-
-        {/* Global Year & Month Quick Selector */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
-            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+      {/* TOP CONTROL BAR: BAILLEURS, MOIS (Janvier à Décembre) & ACTIONS */}
+      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-sm space-y-3 no-print">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Landlord Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+              <UserCheck className="w-4 h-4 text-blue-600" />
+              Bailleur :
+            </span>
             <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent border-none text-slate-800 font-extrabold focus:outline-none cursor-pointer"
+              value={selectedOwnerId}
+              onChange={(e) => setSelectedOwnerId(e.target.value)}
+              className="text-xs font-black bg-blue-50 border-2 border-blue-600 text-blue-900 rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
             >
-              {MONTHS_LIST.map((m) => (
-                <option key={m} value={m}>{m}</option>
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.firstName} {o.lastName}
+                </option>
               ))}
             </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="bg-transparent border-none text-slate-800 font-extrabold focus:outline-none cursor-pointer"
+
+            <span className="text-[11px] text-slate-500 hidden lg:inline">
+              (Commission : <strong>{commissionRate}%</strong>)
+            </span>
+          </div>
+
+          {/* Action Buttons: RELEVÉ PDF, EXPORT, AJOUTS */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddEncForm(!showAddEncForm);
+                setShowAddDepForm(false);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
             >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-            </select>
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Encaissement</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddDepForm(!showAddDepForm);
+                setShowAddEncForm(false);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold rounded-lg border border-rose-200 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Dépense</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs"
+              title="Envoyer le relevé par WhatsApp"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 transition-colors cursor-pointer"
+              title="Télécharger en format Excel / CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Excel</span>
+            </button>
+
+            {/* THE REQUESTED BUTTON: RELEVÉ PDF */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-extrabold rounded-lg shadow-sm transition-colors cursor-pointer"
+              title="Imprimer ou enregistrer le Relevé PDF"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Relevé PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 12 MONTHS TABS (DU MOIS DE JANVIER JUSQU'AU MOIS DE DECEMBRE) */}
+        <div className="pt-2 border-t border-slate-200">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-1.5">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              Sélectionnez le mois ({selectedYear}) :
+            </span>
+            <div className="flex items-center gap-1 font-normal text-slate-500">
+              <button
+                type="button"
+                onClick={handleResetMonth}
+                className="text-[11px] text-slate-400 hover:text-rose-600 underline flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Réinitialiser</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1">
+            {MONTHS_LIST.map((m) => {
+              const isSelected = selectedMonth === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSelectedMonth(m)}
+                  className={`py-1.5 px-1 text-center rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                    isSelected
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs scale-102 ring-2 ring-blue-400/40'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {m}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Rechercher bailleur par nom, téléphone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <span className="text-xs font-bold text-slate-500">
-          Mois sélectionné : <strong>{selectedMonth} {selectedYear}</strong> ({owners.length} Bailleurs)
-        </span>
-      </div>
+      {/* Inline Add Encaissement Form */}
+      {showAddEncForm && (
+        <form onSubmit={handleSaveEncaissement} className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
+          <div className="flex items-center justify-between font-bold text-emerald-900">
+            <span>Ajouter une ligne au tableau Encaissements :</span>
+            <button type="button" onClick={() => setShowAddEncForm(false)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input
+              type="text"
+              required
+              placeholder="Date (ex: 05/09/2026)"
+              value={encDate}
+              onChange={(e) => setEncDate(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="text"
+              placeholder="N° Pièce (ex: 261)"
+              value={encPiece}
+              onChange={(e) => setEncPiece(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Désignation (ex: Appartement 3ème droite)"
+              value={encDesignation}
+              onChange={(e) => setEncDesignation(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs sm:col-span-2"
+            />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
+            <input
+              type="number"
+              required
+              placeholder="Montant HT"
+              value={encMontantHT}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setEncMontantHT(val);
+                setEncTeom(Math.round(val * 0.036));
+              }}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs font-bold"
+            />
+            <input
+              type="number"
+              placeholder="TEOM"
+              value={encTeom}
+              onChange={(e) => setEncTeom(Number(e.target.value))}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="number"
+              placeholder="TVA 18%"
+              value={encTva}
+              onChange={(e) => setEncTva(Number(e.target.value))}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="number"
+              placeholder="TVL"
+              value={encTvl}
+              onChange={(e) => setEncTvl(Number(e.target.value))}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <button
+              type="submit"
+              className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs col-span-2 sm:col-span-1"
+            >
+              Enregistrer
+            </button>
+          </div>
+        </form>
+      )}
 
-      {/* Landlords Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {owners
-          .filter((o) => `${o.firstName} ${o.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()))
-          .map((o) => {
-            const initials = `${(o.firstName?.[0] || 'B').toUpperCase()}${(o.lastName?.[0] || '').toUpperCase()}`;
-            const isBarry = o.firstName?.toLowerCase().includes('yangouba') || o.lastName?.toLowerCase().includes('barry');
-            const data = getSheetDataForOwner(o, selectedMonth, selectedYear);
+      {/* Inline Add Depense Form */}
+      {showAddDepForm && (
+        <form onSubmit={handleSaveDepense} className="p-3 bg-rose-50 border border-rose-300 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
+          <div className="flex items-center justify-between font-bold text-rose-900">
+            <span>Ajouter une ligne au tableau Dépenses :</span>
+            <button type="button" onClick={() => setShowAddDepForm(false)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input
+              type="text"
+              required
+              placeholder="Date (ex: 15/09/2026)"
+              value={depDate}
+              onChange={(e) => setDepDate(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="text"
+              placeholder="N° Pièce (optionnel)"
+              value={depPiece}
+              onChange={(e) => setDepPiece(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Désignation de la dépense"
+              value={depDesignation}
+              onChange={(e) => setDepDesignation(e.target.value)}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs sm:col-span-2"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+            <input
+              type="number"
+              required
+              placeholder="Montant (CFA)"
+              value={depMontant}
+              onChange={(e) => setDepMontant(Number(e.target.value))}
+              className="p-1.5 bg-white border border-slate-300 rounded text-xs font-bold"
+            />
+            <button
+              type="submit"
+              className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-xs"
+            >
+              Enregistrer la dépense
+            </button>
+          </div>
+        </form>
+      )}
 
-            const ht = data.encaissements.reduce((acc, r) => acc + (r.montantHT || 0), 0);
-            const teom = data.encaissements.reduce((acc, r) => acc + (r.teomAmount || 0), 0);
-            const tva = data.encaissements.reduce((acc, r) => acc + (r.tvaAmount || 0), 0);
-            const tvl = data.encaissements.reduce((acc, r) => acc + (r.tvlAmount || 0), 0);
-            const gross = ht + teom + tva + tvl;
+      {/* THE EXACT SPREADSHEET TABLE REPLICA AS REQUESTED BY THE USER */}
+      <div className="bg-white rounded-xl border-2 border-black shadow-lg overflow-x-auto print:border-none print:shadow-none p-1 sm:p-3">
+        <div className="min-w-[850px]">
+          <table className="w-full border-collapse text-xs font-sans">
+            {/* 1. TOP TITLE HEADER */}
+            <thead>
+              <tr>
+                <th
+                  colSpan={7}
+                  className="border-2 border-black py-2 px-3 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
+                >
+                  Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth} {selectedYear}
+                </th>
+                <th
+                  className="border-2 border-black py-2 px-3 text-center text-xs font-black text-slate-900 bg-white w-44 uppercase tracking-wider"
+                >
+                  ETAT DU COMPTE
+                </th>
+              </tr>
 
-            const rawDep = data.depenses.reduce((acc, r) => acc + (r.montant || 0), 0);
-            const comm = Math.round(ht * (data.commissionRate / 100));
-            const totalDep = rawDep + comm;
-            const net = Math.max(0, gross - totalDep);
+              {/* 2. ENCAISSEMENTS TABLE HEADER */}
+              <tr className="bg-white font-black text-slate-900 text-center">
+                <th className="border-2 border-black p-1.5 w-24">Dates</th>
+                <th className="border-2 border-black p-1.5 w-20">N° Pièce</th>
+                <th className="border-2 border-black p-1.5 text-center">Désignations</th>
+                <th className="border-2 border-black p-1.5 w-28 text-center">Montants HT</th>
+                <th className="border-2 border-black p-1.5 w-24 text-center">TEOM</th>
+                <th className="border-2 border-black p-1.5 w-24 text-center">TVA 18%</th>
+                <th className="border-2 border-black p-1.5 w-24 text-center">TVL</th>
 
-            return (
-              <div
-                key={o.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all p-5 space-y-4 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 font-black text-sm flex items-center justify-center ring-2 ring-blue-500/20">
-                        {initials}
+                {/* THE RIGHT COLUMN: ETAT DU COMPTE (Spanning from top to bottom) */}
+                <th rowSpan={24} className="border-2 border-black p-3 align-top bg-white">
+                  <div className="h-full flex flex-col justify-between text-left space-y-4">
+                    <div className="border-b border-black pb-2 text-center">
+                      <p className="font-black text-[11px] text-slate-900 uppercase">SYNTHÈSE DE GÉRANCE</p>
+                      <p className="text-[10px] text-slate-500 font-medium">{selectedMonth} {selectedYear}</p>
+                    </div>
+
+                    <div className="space-y-2 text-[11px]">
+                      <div className="flex justify-between font-bold text-slate-700">
+                        <span>Total Reçu :</span>
+                        <span className="text-emerald-700">+{totalLocationPlusTeom.toLocaleString('fr-FR')} CFA</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-slate-700">
+                        <span>Total Débours :</span>
+                        <span className="text-rose-700">-{totalDepenses.toLocaleString('fr-FR')} CFA</span>
+                      </div>
+                      <div className="border-t border-black pt-1.5 flex justify-between font-black text-xs text-red-600">
+                        <span>Net à reverser :</span>
+                        <span>{montantAVerser.toLocaleString('fr-FR')} CFA</span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-300 pt-2 text-[10px] space-y-1">
+                      <p className="font-bold text-slate-800">Bénéficiaire :</p>
+                      <p className="font-medium text-slate-700">{currentOwner.firstName} {currentOwner.lastName}</p>
+                      <p className="font-mono text-slate-500 text-[9px] truncate">
+                        {currentOwner.bankAccount || 'Wave / OM / Virement'}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-slate-300 pt-3 text-[10px] text-center space-y-6">
+                      <div>
+                        <p className="font-bold text-slate-800">LE GESTIONNAIRE :</p>
+                        <p className="text-[9px] text-slate-400 italic">Signature certifiée</p>
+                        <div className="h-10" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-900 text-sm">
-                          {o.firstName} {o.lastName}
-                        </h3>
-                        <p className="text-[10px] text-slate-400">{o.phone}</p>
+                        <p className="font-bold text-slate-800">LE BAILLEUR :</p>
+                        <p className="text-[9px] text-slate-400 italic">Bon pour décharge</p>
+                        <div className="h-10" />
                       </div>
                     </div>
-                    <span className="text-[10px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
-                      {data.commissionRate}% Com.
-                    </span>
                   </div>
+                </th>
+              </tr>
+            </thead>
 
-                  {/* Period badge */}
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                    <span>Période du relevé :</span>
-                    <strong className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      {selectedMonth} {selectedYear}
-                    </strong>
-                  </div>
+            {/* 3. ENCAISSEMENTS ROWS */}
+            <tbody>
+              {currentEncaissements.map((r) => (
+                <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50">
+                  <td className="border border-black p-1 text-[11px] font-medium">{r.date}</td>
+                  <td className="border border-black p-1 text-[11px] font-mono">{r.pieceNumber}</td>
+                  <td className="border border-black p-1 text-center font-medium">{r.designation}</td>
+                  <td className="border border-black p-1 text-center font-bold">
+                    {r.montantHT > 0 ? `${r.montantHT.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                  <td className="border border-black p-1 text-center font-medium">
+                    {r.teomAmount > 0 ? `${r.teomAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                  <td className="border border-black p-1 text-center font-medium">
+                    {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                  <td className="border border-black p-1 text-center font-medium">
+                    {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                </tr>
+              ))}
 
-                  {/* Financial Flow Summary Box */}
-                  <div className="mt-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Location + TEOM + TVA :</span>
-                      <span className="font-bold text-emerald-600">+{gross.toLocaleString('fr-FR')} CFA</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Dépenses &amp; Travaux :</span>
-                      <span className="font-bold text-rose-600">-{totalDep.toLocaleString('fr-FR')} CFA</span>
-                    </div>
-                    <div className="border-t border-slate-200 pt-1.5 flex justify-between font-black text-slate-900">
-                      <span>Montant à verser (Net) :</span>
-                      <span className="text-blue-700 text-sm">{net.toLocaleString('fr-FR')} CFA</span>
-                    </div>
-                  </div>
-                </div>
+              {/* Empty rows to match authentic grid from user's image */}
+              {Array.from({ length: encEmptyRowsCount }).map((_, i) => (
+                <tr key={`enc-empty-${i}`} className="h-6">
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                </tr>
+              ))}
 
-                {/* THE REQUESTED BUTTON: RELEVÉ PDF */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveOwnerModal(o)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-700/20 transition-all cursor-pointer group"
-                    title="Ouvrir le Relevé PDF au format bordereau officiel"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-amber-300 transition-transform group-hover:scale-110" />
-                    <span>Relevé PDF ({selectedMonth})</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-      </div>
+              {/* TOTAL ROW (CYAN / SKY-BLUE: #00a2e8) */}
+              <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
+                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                  Total
+                </td>
+                <td className="border-2 border-black p-1.5 text-center font-black">
+                  {totalMontantHT.toLocaleString('fr-FR')} CFA
+                </td>
+                <td className="border-2 border-black p-1.5 text-center font-black">
+                  {totalTEOM.toLocaleString('fr-FR')} CFA
+                </td>
+                <td className="border-2 border-black p-1.5 text-center font-black">
+                  {totalTVA > 0 ? `${totalTVA.toLocaleString('fr-FR')} CFA` : ''}
+                </td>
+                <td className="border-2 border-black p-1.5 text-center font-black">
+                  {totalTVL.toLocaleString('fr-FR')} CFA
+                </td>
+              </tr>
 
-      {/* FULL-SCREEN / EXPANDED MODAL: EXACT REPLICA OF THE USER'S EXCEL SPREADSHEET */}
-      {activeOwnerModal && modalSheetData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-5xl w-full p-4 sm:p-6 shadow-2xl border border-slate-300 animate-in fade-in zoom-in-95 duration-150 space-y-4 my-6">
-            {/* Modal Controls Bar (Hidden on print) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 no-print">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-600 text-white">
-                  Relevé Officiel
-                </span>
-                <span className="font-extrabold text-xs text-slate-800">
-                  {activeOwnerModal.firstName} {activeOwnerModal.lastName} — {selectedMonth} {selectedYear}
-                </span>
-              </div>
+              {/* RED BANNER ROW: LOCATION+ TEOM (EXACT LABEL FROM USER'S IMAGE) */}
+              <tr className="bg-[#ed1c24] text-black font-black border-2 border-black">
+                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black tracking-wide">
+                  Location+ TEOM
+                </td>
+                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black text-xs sm:text-sm">
+                  {totalLocationPlusTeom.toLocaleString('fr-FR')} CFA
+                </td>
+              </tr>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSendWhatsApp}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                  title="Partager le relevé sur WhatsApp"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>WhatsApp</span>
-                </button>
+              {/* 4. DÉPENSES TABLE HEADER */}
+              <tr className="bg-white font-black text-slate-900 text-center">
+                <th className="border-2 border-black p-1.5 w-24">Dates</th>
+                <th className="border-2 border-black p-1.5 w-20">N°Pièce</th>
+                <th className="border-2 border-black p-1.5 text-center">Dépenses</th>
+                <th colSpan={4} className="border-2 border-black p-1.5 text-center">Montants</th>
+              </tr>
 
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                  title="Télécharger la feuille au format Excel"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Excel (.csv)</span>
-                </button>
+              {/* DÉPENSES ROWS */}
+              {currentDepenses.map((d) => (
+                <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50">
+                  <td className="border border-black p-1 text-[11px] font-medium">{d.date}</td>
+                  <td className="border border-black p-1 text-[11px] font-mono">{d.pieceNumber}</td>
+                  <td className="border border-black p-1 text-center font-medium">{d.designation}</td>
+                  <td colSpan={4} className="border border-black p-1 text-center font-bold">
+                    {d.montant > 0 ? `${d.montant.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                </tr>
+              ))}
 
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
-                  title="Imprimer ou enregistrer en PDF"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimer / PDF</span>
-                </button>
+              {/* Empty rows to match authentic grid */}
+              {Array.from({ length: depEmptyRowsCount }).map((_, i) => (
+                <tr key={`dep-empty-${i}`} className="h-6">
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td className="border border-black p-1"></td>
+                  <td colSpan={4} className="border border-black p-1"></td>
+                </tr>
+              ))}
 
-                <button
-                  type="button"
-                  onClick={() => setActiveOwnerModal(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                  title="Fermer le relevé"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+              {/* COMMISSION AGENCE ROW (YELLOW / GOLD: #fff200) */}
+              <tr className="bg-[#fff200] text-black font-black text-center border-2 border-black">
+                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                  Commission Agence {commissionRate}%
+                </td>
+                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
+                  {commissionAmount.toLocaleString('fr-FR')} CFA
+                </td>
+              </tr>
 
-            {/* Month Switcher inside Modal: Janvier à Décembre */}
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-2 no-print">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-extrabold text-slate-700 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                  Changer de mois (Janvier à Décembre {selectedYear}) :
-                </span>
+              {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
+              <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
+                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                  Total Dépenses
+                </td>
+                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
+                  {totalDepenses.toLocaleString('fr-FR')} CFA
+                </td>
+              </tr>
 
-                {/* Quick Owner Switcher in modal */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-slate-500 font-bold">Bailleur :</span>
-                  <select
-                    value={activeOwnerModal.id}
-                    onChange={(e) => {
-                      const found = owners.find((o) => o.id === e.target.value);
-                      if (found) setActiveOwnerModal(found);
-                    }}
-                    className="text-xs font-black bg-white border border-slate-300 rounded px-2 py-1 text-slate-800 focus:outline-none"
-                  >
-                    {owners.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.firstName} {o.lastName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* 12 Months Tabs */}
-              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1">
-                {MONTHS_LIST.map((m) => {
-                  const isCur = selectedMonth === m;
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setSelectedMonth(m)}
-                      className={`py-1.5 px-0.5 text-center rounded-lg text-[11px] font-extrabold transition-all cursor-pointer border ${
-                        isCur
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Quick Live Addition Forms inside Modal */}
-            <div className="flex flex-wrap items-center gap-2 no-print">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddEncaissementForm(!showAddEncaissementForm);
-                  setShowAddDepenseForm(false);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Ajouter Encaissement (Loyer)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddDepenseForm(!showAddDepenseForm);
-                  setShowAddEncaissementForm(false);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold rounded-lg border border-rose-200 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Ajouter Dépense (Travaux/Charges)</span>
-              </button>
-            </div>
-
-            {/* Form to insert encaissement */}
-            {showAddEncaissementForm && (
-              <form onSubmit={handleSaveNewEncaissement} className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
-                <div className="font-bold text-emerald-900">Ajouter une ligne d'encaissement au relevé :</div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Date (ex: 05/08/2026)"
-                    value={newEncDate}
-                    onChange={(e) => setNewEncDate(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded"
-                  />
-                  <input
-                    type="text"
-                    placeholder="N° Pièce"
-                    value={newEncPiece}
-                    onChange={(e) => setNewEncPiece(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Désignation (ex: Appartement 3ème droite)"
-                    value={newEncDesignation}
-                    onChange={(e) => setNewEncDesignation(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded sm:col-span-2"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
-                  <input
-                    type="number"
-                    required
-                    placeholder="Montant HT (CFA)"
-                    value={newEncMontantHT}
-                    onChange={(e) => setNewEncMontantHT(Number(e.target.value))}
-                    className="p-1.5 bg-white border border-slate-300 rounded font-bold"
-                  />
-                  <input
-                    type="number"
-                    placeholder="TVL (CFA)"
-                    value={newEncTVL}
-                    onChange={(e) => setNewEncTVL(Number(e.target.value))}
-                    className="p-1.5 bg-white border border-slate-300 rounded"
-                  />
-                  <label className="flex items-center gap-1.5 text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={newEncIsCommercial}
-                      onChange={(e) => setNewEncIsCommercial(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span>Local Commercial (TVA 18%)</span>
-                  </label>
-                  <button
-                    type="submit"
-                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded"
-                  >
-                    Enregistrer la ligne
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Form to insert depense */}
-            {showAddDepenseForm && (
-              <form onSubmit={handleSaveNewDepense} className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
-                <div className="font-bold text-rose-900">Ajouter une ligne de dépense au relevé :</div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Date (ex: 25/08/2026)"
-                    value={newDepDate}
-                    onChange={(e) => setNewDepDate(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded"
-                  />
-                  <input
-                    type="text"
-                    placeholder="N° Pièce (optionnel)"
-                    value={newDepPiece}
-                    onChange={(e) => setNewDepPiece(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Libellé dépense (ex: Facture Sen'eau)"
-                    value={newDepDesignation}
-                    onChange={(e) => setNewDepDesignation(e.target.value)}
-                    className="p-1.5 bg-white border border-slate-300 rounded sm:col-span-2"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
-                  <input
-                    type="number"
-                    required
-                    placeholder="Montant Dépense (CFA)"
-                    value={newDepMontant}
-                    onChange={(e) => setNewDepMontant(Number(e.target.value))}
-                    className="p-1.5 bg-white border border-slate-300 rounded font-bold"
-                  />
-                  <label className="flex items-center gap-1.5 text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={newDepIsRed}
-                      onChange={(e) => setNewDepIsRed(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span>Mettre en évidence (Rouge)</span>
-                  </label>
-                  <button
-                    type="submit"
-                    className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded col-span-2"
-                  >
-                    Enregistrer la dépense
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* THE EXACT SPREADSHEET TABLE REPLICA */}
-            <div className="overflow-x-auto border-2 border-black bg-white p-1 print:border-none print:p-0">
-              <div className="min-w-[840px]">
-                <table className="w-full border-collapse text-xs font-sans">
-                  {/* TOP HEADER */}
-                  <thead>
-                    <tr>
-                      <th
-                        colSpan={7}
-                        className="border-2 border-black py-2.5 px-3 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
-                      >
-                        Situation {activeOwnerModal.firstName} {activeOwnerModal.lastName} de {selectedMonth.toUpperCase()} {selectedYear}
-                      </th>
-                      <th
-                        className="border-2 border-black py-2.5 px-3 text-center text-xs font-black text-slate-900 bg-white w-48 uppercase tracking-wider"
-                      >
-                        ETAT DU COMPTE
-                      </th>
-                    </tr>
-
-                    {/* ENCAISSEMENTS HEADER */}
-                    <tr className="bg-white font-black text-slate-900 text-center">
-                      <th className="border-2 border-black p-1.5 w-24">Dates</th>
-                      <th className="border-2 border-black p-1.5 w-20">N° Pièce</th>
-                      <th className="border-2 border-black p-1.5 text-center">Désignations</th>
-                      <th className="border-2 border-black p-1.5 w-28 text-center">Montants HT</th>
-                      <th className="border-2 border-black p-1.5 w-24 text-center">TEOM 3,6%</th>
-                      <th className="border-2 border-black p-1.5 w-24 text-center">TVA 18%</th>
-                      <th className="border-2 border-black p-1.5 w-24 text-center">TVL</th>
-                      {/* RIGHT COLUMN: ETAT DU COMPTE */}
-                      <th rowSpan={16} className="border-2 border-black p-3 align-top bg-slate-50/50">
-                        <div className="space-y-3 text-left">
-                          <div className="border-b border-black pb-2 text-center">
-                            <p className="font-extrabold text-[11px] text-slate-900 uppercase">SOLDE BANCAIRE / CAISSE</p>
-                            <p className="text-[10px] text-slate-500">Mois de {selectedMonth} {selectedYear}</p>
-                          </div>
-
-                          <div className="space-y-1.5 text-[11px]">
-                            <div className="flex justify-between font-bold">
-                              <span>Total Reçu :</span>
-                              <span className="text-emerald-700">+{totalLocationTeomTva.toLocaleString('fr-FR')} F</span>
-                            </div>
-                            <div className="flex justify-between font-bold">
-                              <span>Total Dépensé :</span>
-                              <span className="text-rose-700">-{totalDepensesWithCommission.toLocaleString('fr-FR')} F</span>
-                            </div>
-                            <div className="border-t border-black pt-1 flex justify-between font-black text-xs text-red-600">
-                              <span>Solde Net :</span>
-                              <span>{montantAVerser.toLocaleString('fr-FR')} F</span>
-                            </div>
-                          </div>
-
-                          <div className="border-t border-slate-300 pt-2 text-[10px] space-y-1">
-                            <p className="font-bold text-slate-700">Mode de reversement :</p>
-                            <p className="font-mono text-slate-600 bg-white p-1 rounded border border-slate-200">
-                              {activeOwnerModal.bankAccount || 'Virement Wave / Orange Money'}
-                            </p>
-                          </div>
-
-                          <div className="border-t border-slate-300 pt-3 text-[10px] text-center space-y-8">
-                            <div>
-                              <p className="font-bold text-slate-800">VISA GESTIONNAIRE :</p>
-                              <p className="text-[9px] text-slate-400 italic">Signature certifiée</p>
-                              <div className="h-8" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-800">ACCORD BAILLEUR :</p>
-                              <p className="text-[9px] text-slate-400 italic">Bon pour décharge</p>
-                              <div className="h-8" />
-                            </div>
-                          </div>
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-
-                  {/* ENCAISSEMENTS ROWS */}
-                  <tbody>
-                    {modalSheetData.encaissements.map((r) => (
-                      <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50">
-                        <td className="border border-black p-1 text-[11px] font-medium">{r.date}</td>
-                        <td className="border border-black p-1 text-[11px] font-mono">{r.pieceNumber}</td>
-                        <td className="border border-black p-1 text-center font-medium">
-                          {r.designation.includes('(Août)') ? (
-                            <>
-                              Studio RDC <span className="text-red-600 font-bold">(Août)</span>
-                            </>
-                          ) : (
-                            r.designation
-                          )}
-                        </td>
-                        <td className="border border-black p-1 text-center font-bold">
-                          {r.montantHT > 0 ? `${r.montantHT.toLocaleString('fr-FR')} CFA` : ''}
-                        </td>
-                        <td className="border border-black p-1 text-center font-medium">
-                          {r.teomAmount > 0 ? `${r.teomAmount.toLocaleString('fr-FR')} CFA` : ''}
-                        </td>
-                        <td className="border border-black p-1 text-center font-medium">
-                          {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
-                        </td>
-                        <td className="border border-black p-1 text-center font-medium">
-                          {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
-                        </td>
-                      </tr>
-                    ))}
-
-                    {/* Empty spacer row */}
-                    <tr className="h-6">
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                      <td className="border border-black p-1"></td>
-                    </tr>
-
-                    {/* TOTAL ENCAISSEMENTS (CYAN / SKY-BLUE: #00a2e8) */}
-                    <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
-                      <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                        Total
-                      </td>
-                      <td className="border-2 border-black p-1.5 text-center font-black">
-                        {totalMontantHT.toLocaleString('fr-FR')} CFA
-                      </td>
-                      <td className="border-2 border-black p-1.5 text-center font-black">
-                        {totalTEOM.toLocaleString('fr-FR')} CFA
-                      </td>
-                      <td className="border-2 border-black p-1.5 text-center font-black">
-                        {totalTVA.toLocaleString('fr-FR')} CFA
-                      </td>
-                      <td className="border-2 border-black p-1.5 text-center font-black">
-                        {totalTVL.toLocaleString('fr-FR')} CFA
-                      </td>
-                    </tr>
-
-                    {/* RED BANNER ROW: LOCATION + TEOM + TVA */}
-                    <tr className="bg-[#ed1c24] text-black font-black border-2 border-black">
-                      <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black tracking-wide">
-                        Location+ TEOM+TVA
-                      </td>
-                      <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black text-sm">
-                        {totalLocationTeomTva.toLocaleString('fr-FR')} CFA
-                      </td>
-                    </tr>
-
-                    {/* DÉPENSES HEADER */}
-                    <tr className="bg-white font-black text-slate-900 text-center">
-                      <th className="border-2 border-black p-1.5 w-24">Dates</th>
-                      <th className="border-2 border-black p-1.5 w-20">N°Pièce</th>
-                      <th className="border-2 border-black p-1.5 text-center">Dépenses</th>
-                      <th colSpan={4} className="border-2 border-black p-1.5 text-center">Montants</th>
-                    </tr>
-
-                    {/* DÉPENSES ROWS */}
-                    {modalSheetData.depenses.map((d) => (
-                      <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50">
-                        <td className={`border border-black p-1 text-[11px] font-medium ${d.isRedHighlight ? 'text-red-600 font-bold' : ''}`}>
-                          {d.date}
-                        </td>
-                        <td className="border border-black p-1 text-[11px] font-mono">{d.pieceNumber}</td>
-                        <td className={`border border-black p-1 text-center font-medium ${d.isRedHighlight ? 'text-red-600 font-bold' : ''}`}>
-                          {d.designation}
-                        </td>
-                        <td colSpan={4} className={`border border-black p-1 text-center font-bold ${d.isRedHighlight ? 'text-red-600 font-black' : ''}`}>
-                          {d.montant.toLocaleString('fr-FR')} CFA
-                        </td>
-                      </tr>
-                    ))}
-
-                    {/* COMMISSION AGENCE ROW (YELLOW / GOLD: #fff200) */}
-                    <tr className="bg-[#fff200] text-black font-black text-center border-2 border-black">
-                      <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                        Commission Agence {modalSheetData.commissionRate}%
-                      </td>
-                      <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
-                        {commissionAgence.toLocaleString('fr-FR')} CFA
-                      </td>
-                    </tr>
-
-                    {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
-                    <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
-                      <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                        Total Dépenses
-                      </td>
-                      <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
-                        {totalDepensesWithCommission.toLocaleString('fr-FR')} CFA
-                      </td>
-                    </tr>
-
-                    {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
-                    <tr className="bg-[#ed1c24] text-black font-black text-center border-2 border-black">
-                      <td colSpan={3} className="border-2 border-black p-2 text-center font-black text-sm tracking-wide">
-                        Montant à verser
-                      </td>
-                      <td colSpan={4} className="border-2 border-black p-2 text-center font-black text-sm">
-                        {montantAVerser.toLocaleString('fr-FR')} CFA
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+              {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
+              <tr className="bg-[#ed1c24] text-black font-black text-center border-2 border-black">
+                <td colSpan={3} className="border-2 border-black p-2 text-center font-black text-xs sm:text-sm tracking-wide">
+                  Montant à verser
+                </td>
+                <td colSpan={4} className="border-2 border-black p-2 text-center font-black text-xs sm:text-sm">
+                  {montantAVerser.toLocaleString('fr-FR')} CFA
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }
