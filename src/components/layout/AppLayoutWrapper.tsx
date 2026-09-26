@@ -7,6 +7,7 @@ import { useSunuGestion } from '@/context/SunuGestionContext';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import DocumentViewerModal from '@/components/documents/DocumentViewerModal';
+import SunuAiAssistant from '@/components/ai/SunuAiAssistant';
 import { Lock, ArrowRight, ShieldAlert } from 'lucide-react';
 import { User } from '@/types/sunugestion';
 
@@ -110,6 +111,9 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           onClose={() => setSelectedDocumentForPrint(null)}
         />
       )}
+
+      {/* Assistant Vocal & Intelligent Bilingue (Français & Wolof) */}
+      <SunuAiAssistant />
     </div>
   );
 }
