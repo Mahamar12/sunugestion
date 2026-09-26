@@ -756,207 +756,208 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
 
       {/* THE EXACT SPREADSHEET TABLE REPLICA AS REQUESTED BY THE USER */}
       <div className="bg-white rounded-xl border-2 border-black shadow-lg overflow-x-auto print:border-none print:shadow-none p-1 sm:p-3">
-        <div className="min-w-[850px]">
-          <table className="w-full border-collapse text-xs font-sans">
-            {/* 1. TOP TITLE HEADER */}
-            <thead>
-              <tr>
-                <th
-                  colSpan={7}
-                  className="border-2 border-black py-2 px-3 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
-                >
-                  Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth} {selectedYear}
-                </th>
-                <th
-                  className="border-2 border-black py-2 px-3 text-center text-xs font-black text-slate-900 bg-white w-44 uppercase tracking-wider"
-                >
-                  ETAT DU COMPTE
-                </th>
-              </tr>
+        <div className="min-w-[850px] flex border-2 border-black">
+          {/* LEFT: MAIN BORDEREAU SPREADSHEET */}
+          <div className="flex-1">
+            <table className="w-full border-collapse text-xs font-sans">
+              <thead>
+                {/* 1. TOP TITLE HEADER */}
+                <tr>
+                  <th
+                    colSpan={7}
+                    className="border-b-2 border-black py-2 px-3 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
+                  >
+                    Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth} {selectedYear}
+                  </th>
+                </tr>
 
-              {/* 2. ENCAISSEMENTS TABLE HEADER */}
-              <tr className="bg-white font-black text-slate-900 text-center">
-                <th className="border-2 border-black p-1.5 w-24">Dates</th>
-                <th className="border-2 border-black p-1.5 w-20">N° Pièce</th>
-                <th className="border-2 border-black p-1.5 text-center">Désignations</th>
-                <th className="border-2 border-black p-1.5 w-28 text-center">Montants HT</th>
-                <th className="border-2 border-black p-1.5 w-24 text-center">TEOM</th>
-                <th className="border-2 border-black p-1.5 w-24 text-center">TVA 18%</th>
-                <th className="border-2 border-black p-1.5 w-24 text-center">TVL</th>
+                {/* 2. ENCAISSEMENTS TABLE HEADER */}
+                <tr className="bg-white font-black text-slate-900 text-center border-b-2 border-black">
+                  <th className="border-r-2 border-black py-1.5 px-2 w-24">Dates</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 w-20">N° Pièce</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 text-center">Désignations</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 w-28 text-center">Montants HT</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 w-24 text-center">TEOM</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 w-24 text-center">TVA 18%</th>
+                  <th className="py-1.5 px-2 w-24 text-center">TVL</th>
+                </tr>
+              </thead>
 
-                {/* THE RIGHT COLUMN: ETAT DU COMPTE (Spanning from top to bottom) */}
-                <th rowSpan={24} className="border-2 border-black p-3 align-top bg-white">
-                  <div className="h-full flex flex-col justify-between text-left space-y-4">
-                    <div className="border-b border-black pb-2 text-center">
-                      <p className="font-black text-[11px] text-slate-900 uppercase">SYNTHÈSE DE GÉRANCE</p>
-                      <p className="text-[10px] text-slate-500 font-medium">{selectedMonth} {selectedYear}</p>
-                    </div>
+              {/* 3. ENCAISSEMENTS ROWS */}
+              <tbody>
+                {currentEncaissements.map((r) => (
+                  <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50 border-b border-black">
+                    <td className="border-r border-black py-1 px-1.5 text-[11px] font-medium">{r.date}</td>
+                    <td className="border-r border-black py-1 px-1.5 text-[11px] font-mono">{r.pieceNumber}</td>
+                    <td className="border-r border-black py-1 px-2 text-center font-medium">{r.designation}</td>
+                    <td className="border-r border-black py-1 px-1.5 text-center font-bold">
+                      {r.montantHT > 0 ? `${r.montantHT.toLocaleString('fr-FR')} CFA` : ''}
+                    </td>
+                    <td className="border-r border-black py-1 px-1.5 text-center font-medium">
+                      {r.teomAmount > 0 ? `${r.teomAmount.toLocaleString('fr-FR')} CFA` : ''}
+                    </td>
+                    <td className="border-r border-black py-1 px-1.5 text-center font-medium">
+                      {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
+                    </td>
+                    <td className="py-1 px-1.5 text-center font-medium">
+                      {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
+                    </td>
+                  </tr>
+                ))}
 
-                    <div className="space-y-2 text-[11px]">
-                      <div className="flex justify-between font-bold text-slate-700">
-                        <span>Total Reçu :</span>
-                        <span className="text-emerald-700">+{totalLocationPlusTeom.toLocaleString('fr-FR')} CFA</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-slate-700">
-                        <span>Total Débours :</span>
-                        <span className="text-rose-700">-{totalDepenses.toLocaleString('fr-FR')} CFA</span>
-                      </div>
-                      <div className="border-t border-black pt-1.5 flex justify-between font-black text-xs text-red-600">
-                        <span>Net à reverser :</span>
-                        <span>{montantAVerser.toLocaleString('fr-FR')} CFA</span>
-                      </div>
-                    </div>
+                {/* Empty rows to match authentic grid from user's image */}
+                {Array.from({ length: encEmptyRowsCount }).map((_, i) => (
+                  <tr key={`enc-empty-${i}`} className="h-6 border-b border-black">
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="p-1"></td>
+                  </tr>
+                ))}
 
-                    <div className="border-t border-slate-300 pt-2 text-[10px] space-y-1">
-                      <p className="font-bold text-slate-800">Bénéficiaire :</p>
-                      <p className="font-medium text-slate-700">{currentOwner.firstName} {currentOwner.lastName}</p>
-                      <p className="font-mono text-slate-500 text-[9px] truncate">
-                        {currentOwner.bankAccount || 'Wave / OM / Virement'}
-                      </p>
-                    </div>
-
-                    <div className="border-t border-slate-300 pt-3 text-[10px] text-center space-y-6">
-                      <div>
-                        <p className="font-bold text-slate-800">LE GESTIONNAIRE :</p>
-                        <p className="text-[9px] text-slate-400 italic">Signature certifiée</p>
-                        <div className="h-10" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-800">LE BAILLEUR :</p>
-                        <p className="text-[9px] text-slate-400 italic">Bon pour décharge</p>
-                        <div className="h-10" />
-                      </div>
-                    </div>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-
-            {/* 3. ENCAISSEMENTS ROWS */}
-            <tbody>
-              {currentEncaissements.map((r) => (
-                <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50">
-                  <td className="border border-black p-1 text-[11px] font-medium">{r.date}</td>
-                  <td className="border border-black p-1 text-[11px] font-mono">{r.pieceNumber}</td>
-                  <td className="border border-black p-1 text-center font-medium">{r.designation}</td>
-                  <td className="border border-black p-1 text-center font-bold">
-                    {r.montantHT > 0 ? `${r.montantHT.toLocaleString('fr-FR')} CFA` : ''}
+                {/* TOTAL ROW (CYAN / SKY-BLUE: #00a2e8) */}
+                <tr className="bg-[#00a2e8] text-black font-black text-center border-y-2 border-black">
+                  <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black">
+                    Total
                   </td>
-                  <td className="border border-black p-1 text-center font-medium">
-                    {r.teomAmount > 0 ? `${r.teomAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  <td className="border-r-2 border-black py-1 px-1.5 text-center font-black">
+                    {totalMontantHT.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="border border-black p-1 text-center font-medium">
-                    {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  <td className="border-r-2 border-black py-1 px-1.5 text-center font-black">
+                    {totalTEOM.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="border border-black p-1 text-center font-medium">
-                    {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
+                  <td className="border-r-2 border-black py-1 px-1.5 text-center font-black">
+                    {totalTVA > 0 ? `${totalTVA.toLocaleString('fr-FR')} CFA` : ''}
+                  </td>
+                  <td className="py-1 px-1.5 text-center font-black">
+                    {totalTVL.toLocaleString('fr-FR')} CFA
                   </td>
                 </tr>
-              ))}
 
-              {/* Empty rows to match authentic grid from user's image */}
-              {Array.from({ length: encEmptyRowsCount }).map((_, i) => (
-                <tr key={`enc-empty-${i}`} className="h-6">
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                </tr>
-              ))}
-
-              {/* TOTAL ROW (CYAN / SKY-BLUE: #00a2e8) */}
-              <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
-                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                  Total
-                </td>
-                <td className="border-2 border-black p-1.5 text-center font-black">
-                  {totalMontantHT.toLocaleString('fr-FR')} CFA
-                </td>
-                <td className="border-2 border-black p-1.5 text-center font-black">
-                  {totalTEOM.toLocaleString('fr-FR')} CFA
-                </td>
-                <td className="border-2 border-black p-1.5 text-center font-black">
-                  {totalTVA > 0 ? `${totalTVA.toLocaleString('fr-FR')} CFA` : ''}
-                </td>
-                <td className="border-2 border-black p-1.5 text-center font-black">
-                  {totalTVL.toLocaleString('fr-FR')} CFA
-                </td>
-              </tr>
-
-              {/* RED BANNER ROW: LOCATION+ TEOM (EXACT LABEL FROM USER'S IMAGE) */}
-              <tr className="bg-[#ed1c24] text-black font-black border-2 border-black">
-                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black tracking-wide">
-                  Location+ TEOM
-                </td>
-                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black text-xs sm:text-sm">
-                  {totalLocationPlusTeom.toLocaleString('fr-FR')} CFA
-                </td>
-              </tr>
-
-              {/* 4. DÉPENSES TABLE HEADER */}
-              <tr className="bg-white font-black text-slate-900 text-center">
-                <th className="border-2 border-black p-1.5 w-24">Dates</th>
-                <th className="border-2 border-black p-1.5 w-20">N°Pièce</th>
-                <th className="border-2 border-black p-1.5 text-center">Dépenses</th>
-                <th colSpan={4} className="border-2 border-black p-1.5 text-center">Montants</th>
-              </tr>
-
-              {/* DÉPENSES ROWS */}
-              {currentDepenses.map((d) => (
-                <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50">
-                  <td className="border border-black p-1 text-[11px] font-medium">{d.date}</td>
-                  <td className="border border-black p-1 text-[11px] font-mono">{d.pieceNumber}</td>
-                  <td className="border border-black p-1 text-center font-medium">{d.designation}</td>
-                  <td colSpan={4} className="border border-black p-1 text-center font-bold">
-                    {d.montant > 0 ? `${d.montant.toLocaleString('fr-FR')} CFA` : ''}
+                {/* RED BANNER ROW: LOCATION+ TEOM (EXACT LABEL FROM USER'S IMAGE) */}
+                <tr className="bg-[#ed1c24] text-black font-black border-b-2 border-black">
+                  <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black tracking-wide">
+                    Location+ TEOM
+                  </td>
+                  <td colSpan={4} className="py-1 px-2 text-center font-black text-xs sm:text-sm">
+                    {totalLocationPlusTeom.toLocaleString('fr-FR')} CFA
                   </td>
                 </tr>
-              ))}
 
-              {/* Empty rows to match authentic grid */}
-              {Array.from({ length: depEmptyRowsCount }).map((_, i) => (
-                <tr key={`dep-empty-${i}`} className="h-6">
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black p-1"></td>
-                  <td colSpan={4} className="border border-black p-1"></td>
+                {/* 4. DÉPENSES TABLE HEADER */}
+                <tr className="bg-white font-black text-slate-900 text-center border-b-2 border-black">
+                  <th className="border-r-2 border-black py-1.5 px-2 w-24">Dates</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 w-20">N°Pièce</th>
+                  <th className="border-r-2 border-black py-1.5 px-2 text-center">Dépenses</th>
+                  <th colSpan={4} className="py-1.5 px-2 text-center">Montants</th>
                 </tr>
-              ))}
 
-              {/* COMMISSION AGENCE ROW (YELLOW / GOLD: #fff200) */}
-              <tr className="bg-[#fff200] text-black font-black text-center border-2 border-black">
-                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                  Commission Agence {commissionRate}%
-                </td>
-                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
-                  {commissionAmount.toLocaleString('fr-FR')} CFA
-                </td>
-              </tr>
+                {/* DÉPENSES ROWS */}
+                {currentDepenses.map((d) => (
+                  <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50 border-b border-black">
+                    <td className="border-r border-black py-1 px-1.5 text-[11px] font-medium">{d.date}</td>
+                    <td className="border-r border-black py-1 px-1.5 text-[11px] font-mono">{d.pieceNumber}</td>
+                    <td className="border-r border-black py-1 px-2 text-center font-medium">{d.designation}</td>
+                    <td colSpan={4} className="py-1 px-2 text-center font-bold">
+                      {d.montant > 0 ? `${d.montant.toLocaleString('fr-FR')} CFA` : ''}
+                    </td>
+                  </tr>
+                ))}
 
-              {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
-              <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
-                <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
-                  Total Dépenses
-                </td>
-                <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
-                  {totalDepenses.toLocaleString('fr-FR')} CFA
-                </td>
-              </tr>
+                {/* Empty rows to match authentic grid */}
+                {Array.from({ length: depEmptyRowsCount }).map((_, i) => (
+                  <tr key={`dep-empty-${i}`} className="h-6 border-b border-black">
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td className="border-r border-black p-1"></td>
+                    <td colSpan={4} className="p-1"></td>
+                  </tr>
+                ))}
 
-              {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
-              <tr className="bg-[#ed1c24] text-black font-black text-center border-2 border-black">
-                <td colSpan={3} className="border-2 border-black p-2 text-center font-black text-xs sm:text-sm tracking-wide">
-                  Montant à verser
-                </td>
-                <td colSpan={4} className="border-2 border-black p-2 text-center font-black text-xs sm:text-sm">
-                  {montantAVerser.toLocaleString('fr-FR')} CFA
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                {/* COMMISSION AGENCE ROW (YELLOW / GOLD: #fff200) */}
+                <tr className="bg-[#fff200] text-black font-black text-center border-y-2 border-black">
+                  <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black">
+                    Commission Agence {commissionRate}%
+                  </td>
+                  <td colSpan={4} className="py-1 px-2 text-center font-black">
+                    {commissionAmount.toLocaleString('fr-FR')} CFA
+                  </td>
+                </tr>
+
+                {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
+                <tr className="bg-[#00a2e8] text-black font-black text-center border-b-2 border-black">
+                  <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black">
+                    Total Dépenses
+                  </td>
+                  <td colSpan={4} className="py-1 px-2 text-center font-black">
+                    {totalDepenses.toLocaleString('fr-FR')} CFA
+                  </td>
+                </tr>
+
+                {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
+                <tr className="bg-[#ed1c24] text-black font-black text-center">
+                  <td colSpan={3} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs sm:text-sm tracking-wide">
+                    Montant à verser
+                  </td>
+                  <td colSpan={4} className="py-1.5 px-2 text-center font-black text-xs sm:text-sm">
+                    {montantAVerser.toLocaleString('fr-FR')} CFA
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* RIGHT: ETAT DU COMPTE COLUMN */}
+          <div className="w-48 sm:w-56 border-l-2 border-black flex flex-col bg-white">
+            <div className="border-b-2 border-black py-2 px-2 text-center text-xs font-black text-slate-900 bg-white uppercase tracking-wider">
+              ETAT DU COMPTE
+            </div>
+            <div className="p-3 flex-1 flex flex-col justify-between text-left space-y-4">
+              <div className="border-b border-black pb-2 text-center">
+                <p className="font-black text-[11px] text-slate-900 uppercase">SYNTHÈSE DE GÉRANCE</p>
+                <p className="text-[10px] text-slate-500 font-medium">{selectedMonth} {selectedYear}</p>
+              </div>
+
+              <div className="space-y-2 text-[11px]">
+                <div className="flex justify-between font-bold text-slate-700">
+                  <span>Total Reçu :</span>
+                  <span className="text-emerald-700">+{totalLocationPlusTeom.toLocaleString('fr-FR')} CFA</span>
+                </div>
+                <div className="flex justify-between font-bold text-slate-700">
+                  <span>Total Débours :</span>
+                  <span className="text-rose-700">-{totalDepenses.toLocaleString('fr-FR')} CFA</span>
+                </div>
+                <div className="border-t border-black pt-1.5 flex justify-between font-black text-xs text-red-600">
+                  <span>Net à reverser :</span>
+                  <span>{montantAVerser.toLocaleString('fr-FR')} CFA</span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-300 pt-2 text-[10px] space-y-1">
+                <p className="font-bold text-slate-800">Bénéficiaire :</p>
+                <p className="font-medium text-slate-700">{currentOwner.firstName} {currentOwner.lastName}</p>
+                <p className="font-mono text-slate-500 text-[9px] truncate">
+                  {currentOwner.bankAccount || 'Wave / OM / Virement'}
+                </p>
+              </div>
+
+              <div className="border-t border-slate-300 pt-3 text-[10px] text-center space-y-6">
+                <div>
+                  <p className="font-bold text-slate-800">LE GESTIONNAIRE :</p>
+                  <p className="text-[9px] text-slate-400 italic">Signature certifiée</p>
+                  <div className="h-10" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">LE BAILLEUR :</p>
+                  <p className="text-[9px] text-slate-400 italic">Bon pour décharge</p>
+                  <div className="h-10" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
