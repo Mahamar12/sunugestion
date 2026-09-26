@@ -450,6 +450,23 @@ const INITIAL_OWNERS: Owner[] = [
     commissionRatePercent: 7,
     createdAt: '2026-02-01',
   },
+  {
+    id: '92bdeb8d-06d2-44b8-8cc4-60ae526d6299',
+    agencyId: 'org-1',
+    firstName: 'Yangouba',
+    lastName: 'Barry',
+    phone: '+221 77 412 88 90',
+    whatsapp: '+221 77 412 88 90',
+    email: 'yangouba.barry@gmail.com',
+    address: 'Dakar, Sénégal',
+    identityDocNumber: '1 823 1980 00551',
+    bankAccount: 'SGBS SN011 01004 551982736 10',
+    notes: 'Bailleur Immeuble Barry (Studios, Magasins & Appartements)',
+    propertiesCount: 1,
+    totalMonthlyRevenueFCFA: 1081000,
+    commissionRatePercent: 10,
+    createdAt: '2026-01-01',
+  },
 ];
 
 const INITIAL_TENANTS: Tenant[] = [

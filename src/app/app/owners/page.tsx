@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useSunuGestion } from '@/context/SunuGestionContext';
 import {
   UserCheck,
@@ -16,7 +17,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   X,
-  Loader2
+  Loader2,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export default function OwnersPage() {
@@ -392,23 +394,14 @@ export default function OwnersPage() {
                     <Pencil className="w-3.5 h-3.5" />
                     <span>Modifier</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedDocumentForPrint({
-                        id: `statement-${o.id}`,
-                        title: `Rapport Mensuel Propriétaire - ${o.firstName} ${o.lastName}`,
-                        category: 'RAPPORT_PROPRIETAIRE',
-                        ownerName: `${o.firstName} ${o.lastName}`,
-                        amountFCFA: netPayout,
-                        date: new Date().toISOString().split('T')[0],
-                      })
-                    }
-                    className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  <Link
+                    href="/app/landlord-statements"
+                    className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                    title="Voir le bordereau de gestion officiel (Janvier à Décembre)"
                   >
-                    <FileBox className="w-3.5 h-3.5" />
-                    <span>Rapport PDF</span>
-                  </button>
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Relevé Bordereau</span>
+                  </Link>
                 </div>
               </div>
             );

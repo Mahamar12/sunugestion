@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useSunuGestion } from '@/context/SunuGestionContext';
-import { PaymentMethod } from '@/types/sunugestion';
+import { PaymentMethod, Owner } from '@/types/sunugestion';
 import {
   Landmark,
   Receipt,
@@ -31,8 +31,49 @@ import {
   ArrowRight,
   ShieldCheck,
   Send,
-  Phone
+  Phone,
+  Table as TableIcon,
+  LayoutGrid,
+  FileSpreadsheet,
+  Edit2,
+  Trash2
 } from 'lucide-react';
+
+interface EncaissementRow {
+  id: string;
+  date: string;
+  pieceNumber: string;
+  designation: string;
+  montantHT: number;
+  teomPercent: number; // usually 3.6%
+  teomAmount: number;
+  tvaAmount: number; // 18% for commercial
+  tvlAmount: number;
+}
+
+interface DepenseRow {
+  id: string;
+  date: string;
+  pieceNumber: string;
+  designation: string;
+  montant: number;
+  isRedHighlight?: boolean;
+}
+
+const MONTHS_LIST = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre'
+];
 
 export default function LandlordStatementsPage() {
   const {
@@ -45,1019 +86,737 @@ export default function LandlordStatementsPage() {
     organization
   } = useSunuGestion();
 
-  // Filters & State
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('Septembre 2026');
-  const [selectedOwnerId, setSelectedOwnerId] = useState<string>('ALL');
+  // Active view: 'SPREADSHEET' (the exact Excel template requested) or 'CARDS'
+  const [activeView, setActiveView] = useState<'SPREADSHEET' | 'CARDS'>('SPREADSHEET');
+
+  // Selected Month & Year
+  const [selectedMonth, setSelectedMonth] = useState<string>('Juillet');
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+
+  // Selected Owner for the Spreadsheet
+  const [currentOwnerId, setCurrentOwnerId] = useState<string>(() => {
+    const barry = owners.find((o) => o.lastName?.toLowerCase().includes('barry') || o.firstName?.toLowerCase().includes('yangouba'));
+    return barry ? barry.id : (owners[0]?.id || '');
+  });
+
+  // Global search for cards view
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Print Modal State
-  const [statementToPrint, setStatementToPrint] = useState<{
-    owner: typeof owners[0];
-    encaissements: typeof payments;
-    depenses: typeof expenses;
-    totalEncaissements: number;
-    totalDepenses: number;
-    commissionAmount: number;
-    soldeNet: number;
-    period: string;
-  } | null>(null);
+  // Modal Sheet State (opened when clicking on "Relevé" from cards or button)
+  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
 
-  // Payout Modal State
-  const [payoutModalOwner, setPayoutModalOwner] = useState<{
-    owner: typeof owners[0];
-    soldeNet: number;
-  } | null>(null);
-  const [payoutMethod, setPayoutMethod] = useState<PaymentMethod>('WAVE');
-  const [payoutRef, setPayoutRef] = useState('');
-  const [payoutAmount, setPayoutAmount] = useState<number>(0);
-  const [payoutDate, setPayoutDate] = useState<string>(new Date().toISOString().split('T')[0]);
-
-  // Track recorded payouts locally
-  const [recordedPayouts, setRecordedPayouts] = useState<Record<string, {
-    date: string;
-    amount: number;
-    method: PaymentMethod;
-    ref: string;
-  }>>({});
-
-  // Available periods
-  const availablePeriods = [
-    'Septembre 2026',
-    'Août 2026',
-    'Juillet 2026',
-    'Juin 2026',
-    'Année 2026 (Consolidé)'
-  ];
-
-  // Map each owner to their properties, units, collections, and expenses
-  const landlordStatements = useMemo(() => {
-    return owners.map((owner) => {
-      // 1. Properties owned by this landlord
-      const ownerProperties = properties.filter(
-        (p) =>
-          p.ownerId === owner.id ||
-          (p.ownerName && `${owner.firstName} ${owner.lastName}`.trim().toLowerCase() === p.ownerName.trim().toLowerCase())
-      );
-      const ownerPropertyIds = new Set(ownerProperties.map((p) => p.id));
-      const ownerPropertyNames = new Set(ownerProperties.map((p) => p.name.trim().toLowerCase()));
-
-      // 2. Units owned by this landlord
-      const ownerUnits = units.filter(
-        (u) =>
-          u.ownerId === owner.id ||
-          ownerPropertyIds.has(u.propertyId) ||
-          (u.ownerName && `${owner.firstName} ${owner.lastName}`.trim().toLowerCase() === u.ownerName.trim().toLowerCase())
-      );
-      const ownerUnitIds = new Set(ownerUnits.map((u) => u.id));
-
-      // 3. Leases for this landlord
-      const ownerLeases = leases.filter(
-        (l) =>
-          l.ownerId === owner.id ||
-          ownerPropertyIds.has(l.propertyId) ||
-          ownerUnitIds.has(l.unitId) ||
-          (l.ownerName && `${owner.firstName} ${owner.lastName}`.trim().toLowerCase() === l.ownerName.trim().toLowerCase())
-      );
-      const ownerLeaseIds = new Set(ownerLeases.map((l) => l.id));
-
-      // 4. Encaissements (Loyers encaissés) for this owner
-      // Match by leaseId, or propertyId, or propertyName
-      const ownerPayments = payments.filter((pay) => {
-        const matchesLease = pay.leaseId && ownerLeaseIds.has(pay.leaseId);
-        const matchesProp = pay.propertyName && ownerPropertyNames.has(pay.propertyName.trim().toLowerCase());
-        const matchesUnit = ownerUnits.some((u) => u.unitNumber === pay.unitNumber && ownerPropertyNames.has(pay.propertyName?.trim().toLowerCase() || ''));
-        
-        // Filter by period if not consolidated
-        let matchesPeriod = true;
-        if (selectedPeriod !== 'Année 2026 (Consolidé)') {
-          if (pay.periodMonthYear) {
-            matchesPeriod = pay.periodMonthYear.toLowerCase().includes(selectedPeriod.split(' ')[0].toLowerCase());
-          }
-        }
-
-        return (matchesLease || matchesProp || matchesUnit) && matchesPeriod;
-      });
-
-      // If no payments match the strict month, fallback to general payments for this owner's properties to show live data
-      const effectivePayments = ownerPayments.length > 0 ? ownerPayments : payments.filter((pay) => {
-        return ownerPropertyNames.has(pay.propertyName?.trim().toLowerCase() || '') ||
-          (pay.leaseId && ownerLeaseIds.has(pay.leaseId));
-      });
-
-      const totalEncaissements = effectivePayments.reduce((acc, p) => acc + (p.amountFCFA || 0), 0);
-
-      // 5. Dépenses (Charges & Travaux d'immeubles imputables à ce bailleur)
-      const ownerExpenses = expenses.filter((e) => {
-        const matchesProp = ownerPropertyIds.has(e.propertyId) ||
-          ownerPropertyNames.has(e.propertyName?.trim().toLowerCase() || '');
-        return matchesProp;
-      });
-
-      const totalDepenses = ownerExpenses.reduce((acc, e) => acc + (e.amountFCFA || 0), 0);
-
-      // 6. Commission Agence
-      const commRate = owner.commissionRatePercent ?? 8;
-      const commissionAmount = Math.round(totalEncaissements * (commRate / 100));
-
-      // 7. SOLDE NET = Encaissements - Dépenses - Commission
-      // (User request: "encaissement moins dépenses")
-      const soldeNet = Math.max(0, totalEncaissements - totalDepenses - commissionAmount);
-
-      const hasPayout = recordedPayouts[owner.id];
-
-      return {
-        owner,
-        properties: ownerProperties,
-        unitsCount: ownerUnits.length,
-        encaissements: effectivePayments,
-        depenses: ownerExpenses,
-        totalEncaissements,
-        totalDepenses,
-        commissionRate: commRate,
-        commissionAmount,
-        soldeNet,
-        isPaid: Boolean(hasPayout),
-        payoutInfo: hasPayout || null
-      };
-    });
-  }, [owners, properties, units, leases, payments, expenses, selectedPeriod, recordedPayouts]);
-
-  // Filtered by search and owner filter
-  const filteredStatements = useMemo(() => {
-    return landlordStatements.filter((stmt) => {
-      const o = stmt.owner;
-      const fullName = `${o.firstName} ${o.lastName}`.toLowerCase();
-      const matchesSearch =
-        fullName.includes(searchQuery.toLowerCase()) ||
-        o.phone?.includes(searchQuery) ||
-        stmt.properties.some((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesOwnerSelect = selectedOwnerId === 'ALL' || o.id === selectedOwnerId;
-
-      return matchesSearch && matchesOwnerSelect;
-    });
-  }, [landlordStatements, searchQuery, selectedOwnerId]);
-
-  // Global consolidated totals
-  const globalEncaissements = landlordStatements.reduce((acc, s) => acc + s.totalEncaissements, 0);
-  const globalDepenses = landlordStatements.reduce((acc, s) => acc + s.totalDepenses, 0);
-  const globalCommissions = landlordStatements.reduce((acc, s) => acc + s.commissionAmount, 0);
-  const globalSoldeNet = landlordStatements.reduce((acc, s) => acc + s.soldeNet, 0);
-
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = [
-      'Bailleur',
-      'Telephone',
-      'Periode',
-      'Encaissements_FCFA',
-      'Depenses_FCFA',
-      'Commission_Taux',
-      'Commission_FCFA',
-      'Solde_Net_FCFA',
-      'Statut_Reversement'
+  // Dynamic rows per owner & month (initialized with Yangouba Barry Juillet 2026 data as exact default)
+  const [customDataStore, setCustomDataStore] = useState<Record<string, {
+    encaissements: EncaissementRow[];
+    depenses: DepenseRow[];
+    commissionRate: number;
+  }>>(() => {
+    // Exact data from user's image for Yangouba Barry de JUILLET 2026
+    const yangoubaJuilletEncaissements: EncaissementRow[] = [
+      { id: 'e1', date: '03/08/2026', pieceNumber: '253', designation: 'Studio RDC (Août)', montantHT: 110000, teomPercent: 3.6, teomAmount: 3960, tvaAmount: 0, tvlAmount: 3040 },
+      { id: 'e2', date: '05/08/2026', pieceNumber: '254', designation: 'Appartement 2eme gauche', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
+      { id: 'e3', date: '05/08/2026', pieceNumber: '256', designation: 'Appartement 3ème gauche', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
+      { id: 'e4', date: '07/08/2026', pieceNumber: '257', designation: 'Magasin RDC', montantHT: 100000, teomPercent: 3.6, teomAmount: 3600, tvaAmount: 18000, tvlAmount: 2500 },
+      { id: 'e5', date: '07/08/2026', pieceNumber: '258', designation: 'Appartement 2eme droite', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 },
+      { id: 'e6', date: '10/08/2026', pieceNumber: '259', designation: 'Appartement 4eme gauche', montantHT: 171000, teomPercent: 3.6, teomAmount: 2000, tvaAmount: 0, tvlAmount: 0 },
+      { id: 'e7', date: '11/08/2026', pieceNumber: '260', designation: 'Appartement 1er droite', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 0 },
     ];
 
-    const rows = filteredStatements.map((s) => [
-      `"${s.owner.firstName} ${s.owner.lastName}"`,
-      `"${s.owner.phone}"`,
-      `"${selectedPeriod}"`,
-      s.totalEncaissements,
-      s.totalDepenses,
-      `"${s.commissionRate}%"`,
-      s.commissionAmount,
-      s.soldeNet,
-      s.isPaid ? '"REVERSE"' : '"EN ATTENTE"'
-    ]);
+    const yangoubaJuilletDepenses: DepenseRow[] = [
+      { id: 'd1', date: '29/08/2026', pieceNumber: '', designation: 'Achat de madar', montant: 1210 },
+      { id: 'd2', date: '06/08/2026', pieceNumber: '', designation: 'Salaire gardien', montant: 100000 },
+      { id: 'd3', date: '17/08/2026', pieceNumber: '', designation: 'Woyofal Appartement 4eme', montant: 1500 },
+      { id: 'd4', date: '22/08/2026', pieceNumber: '', designation: 'Achat de canon App 3eme droite', montant: 5050 },
+      { id: 'd5', date: '24/08/2026', pieceNumber: '', designation: 'Facture Sonatel', montant: 34900 },
+      { id: 'd6', date: '25/08/2026', pieceNumber: '', designation: "Facture Sen'eau", montant: 80674, isRedHighlight: true },
+      { id: 'd7', date: '27/08/2026', pieceNumber: '', designation: 'Achat de ciment', montant: 250 },
+      { id: 'd8', date: '27/08/2026', pieceNumber: '', designation: "Transport + main d'œuvre électricien (branchement courant App 3eme)", montant: 10100 },
+      { id: 'd9', date: '27/08/2026', pieceNumber: '', designation: 'Main d’œuvre demontage clim App 3eme droite', montant: 20200 },
+      { id: 'd10', date: '27/08/2026', pieceNumber: '', designation: 'Transport clim App 3eme', montant: 2020 },
+    ];
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    return {
+      'yangouba-Juillet': {
+        encaissements: yangoubaJuilletEncaissements,
+        depenses: yangoubaJuilletDepenses,
+        commissionRate: 10
+      }
+    };
+  });
+
+  // Identify current owner
+  const currentOwner = useMemo(() => {
+    return owners.find((o) => o.id === currentOwnerId) || owners[0] || {
+      id: 'default-owner',
+      firstName: 'Yangouba',
+      lastName: 'Barry',
+      phone: '+221 77 412 88 90',
+      whatsapp: '+221 77 412 88 90',
+      email: 'yangouba.barry@gmail.com',
+      commissionRatePercent: 10,
+    };
+  }, [owners, currentOwnerId]);
+
+  // Key for data store lookup
+  const dataKey = `${currentOwner.firstName?.toLowerCase().includes('barry') || currentOwner.lastName?.toLowerCase().includes('barry') ? 'yangouba' : currentOwner.id}-${selectedMonth}`;
+
+  // Get or compute rows for the current owner & month
+  const currentSheetData = useMemo(() => {
+    if (customDataStore[dataKey]) {
+      return customDataStore[dataKey];
+    }
+
+    // Otherwise, generate structured data based on the owner's real units & leases
+    const ownerProperties = properties.filter(
+      (p) =>
+        p.ownerId === currentOwner.id ||
+        (p.ownerName && `${currentOwner.firstName} ${currentOwner.lastName}`.trim().toLowerCase() === p.ownerName.trim().toLowerCase())
+    );
+    const ownerPropertyIds = new Set(ownerProperties.map((p) => p.id));
+    const ownerUnits = units.filter((u) => u.ownerId === currentOwner.id || ownerPropertyIds.has(u.propertyId));
+
+    const generatedEncaissements: EncaissementRow[] = ownerUnits.map((u, idx) => {
+      const ht = u.rentFCFA || 150000;
+      const teom = Math.round(ht * 0.036);
+      const isShop = u.type === 'MAGASIN' || u.type === 'LOCAL_COMMERCIAL' || u.type === 'BOUTIQUE';
+      const tva = isShop ? Math.round(ht * 0.18) : 0;
+      return {
+        id: `gen-e-${u.id}-${idx}`,
+        date: `05/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`,
+        pieceNumber: String(250 + idx + 1),
+        designation: `${u.type === 'APPARTEMENT' ? 'Appartement' : u.type} ${u.unitNumber} (${u.propertyName})`,
+        montantHT: ht,
+        teomPercent: 3.6,
+        teomAmount: teom,
+        tvaAmount: tva,
+        tvlAmount: 0
+      };
+    });
+
+    // Sample expenses for this landlord if none exists
+    const generatedDepenses: DepenseRow[] = [
+      { id: `gen-d-1`, date: `10/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`, pieceNumber: 'FAC-01', designation: 'Salaire gardien & entretien', montant: 80000 },
+      { id: `gen-d-2`, date: `15/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`, pieceNumber: 'FAC-02', designation: "Facture Sen'eau parties communes", montant: 25400, isRedHighlight: true },
+      { id: `gen-d-3`, date: `20/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`, pieceNumber: 'FAC-03', designation: 'Maintenance électricité & ampoules LED', montant: 15000 }
+    ];
+
+    return {
+      encaissements: generatedEncaissements.length > 0 ? generatedEncaissements : [
+        { id: 'def-1', date: `05/08/${selectedYear}`, pieceNumber: '253', designation: 'Studio RDC', montantHT: 110000, teomPercent: 3.6, teomAmount: 3960, tvaAmount: 0, tvlAmount: 3040 },
+        { id: 'def-2', date: `08/08/${selectedYear}`, pieceNumber: '254', designation: 'Appartement 2ème', montantHT: 175000, teomPercent: 3.6, teomAmount: 6300, tvaAmount: 0, tvlAmount: 4000 }
+      ],
+      depenses: generatedDepenses,
+      commissionRate: currentOwner.commissionRatePercent ?? 10
+    };
+  }, [customDataStore, dataKey, currentOwner, properties, units, selectedMonth, selectedYear]);
+
+  // Calculations for current sheet
+  const totalMontantHT = useMemo(() => {
+    return currentSheetData.encaissements.reduce((acc, r) => acc + (r.montantHT || 0), 0);
+  }, [currentSheetData]);
+
+  const totalTEOM = useMemo(() => {
+    return currentSheetData.encaissements.reduce((acc, r) => acc + (r.teomAmount || 0), 0);
+  }, [currentSheetData]);
+
+  const totalTVA = useMemo(() => {
+    return currentSheetData.encaissements.reduce((acc, r) => acc + (r.tvaAmount || 0), 0);
+  }, [currentSheetData]);
+
+  const totalTVL = useMemo(() => {
+    return currentSheetData.encaissements.reduce((acc, r) => acc + (r.tvlAmount || 0), 0);
+  }, [currentSheetData]);
+
+  // Gross Total: Location + TEOM + TVA (as displayed in red row in user's image)
+  const totalLocationTeomTva = useMemo(() => {
+    return totalMontantHT + totalTEOM + totalTVA + totalTVL;
+  }, [totalMontantHT, totalTEOM, totalTVA, totalTVL]);
+
+  // Total raw expenses
+  const totalRawDepenses = useMemo(() => {
+    return currentSheetData.depenses.reduce((acc, r) => acc + (r.montant || 0), 0);
+  }, [currentSheetData]);
+
+  // Agency Commission (e.g., 10% of Montant HT)
+  const commissionAgence = useMemo(() => {
+    return Math.round(totalMontantHT * (currentSheetData.commissionRate / 100));
+  }, [totalMontantHT, currentSheetData.commissionRate]);
+
+  // Total Dépenses (Dépenses + Commission)
+  const totalDepensesWithCommission = useMemo(() => {
+    return totalRawDepenses + commissionAgence;
+  }, [totalRawDepenses, commissionAgence]);
+
+  // Montant à verser (Solde Net): Location+TEOM+TVA - Total Dépenses
+  const montantAVerser = useMemo(() => {
+    return Math.max(0, totalLocationTeomTva - totalDepensesWithCommission);
+  }, [totalLocationTeomTva, totalDepensesWithCommission]);
+
+  // Handle adding a new row to Encaissements
+  const handleAddEncaissementRow = () => {
+    const newRow: EncaissementRow = {
+      id: `enc-${Date.now()}`,
+      date: `05/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`,
+      pieceNumber: String(260 + currentSheetData.encaissements.length),
+      designation: 'Nouveau Logement / Unité',
+      montantHT: 150000,
+      teomPercent: 3.6,
+      teomAmount: 5400,
+      tvaAmount: 0,
+      tvlAmount: 0
+    };
+
+    setCustomDataStore((prev) => ({
+      ...prev,
+      [dataKey]: {
+        ...currentSheetData,
+        encaissements: [...currentSheetData.encaissements, newRow]
+      }
+    }));
+  };
+
+  // Handle adding a new row to Dépenses
+  const handleAddDepenseRow = () => {
+    const newRow: DepenseRow = {
+      id: `dep-${Date.now()}`,
+      date: `15/${String(MONTHS_LIST.indexOf(selectedMonth) + 1).padStart(2, '0')}/${selectedYear}`,
+      pieceNumber: '',
+      designation: 'Nouvelle dépense / réparation',
+      montant: 25000
+    };
+
+    setCustomDataStore((prev) => ({
+      ...prev,
+      [dataKey]: {
+        ...currentSheetData,
+        depenses: [...currentSheetData.depenses, newRow]
+      }
+    }));
+  };
+
+  // Export as CSV matching this exact sheet format
+  const handleExportExcelSheet = () => {
+    const title = `Situation ${currentOwner.firstName} ${currentOwner.lastName} de ${selectedMonth.toUpperCase()} ${selectedYear}`;
+    let csv = `${title}\n\n`;
+
+    csv += 'ENCAISSEMENTS\n';
+    csv += 'Dates,N° Pièce,Désignations,Montants HT,TEOM 3.6%,TVA 18%,TVL\n';
+    currentSheetData.encaissements.forEach((e) => {
+      csv += `"${e.date}","${e.pieceNumber}","${e.designation}",${e.montantHT},${e.teomAmount},${e.tvaAmount},${e.tvlAmount}\n`;
+    });
+    csv += `Total,,,${totalMontantHT},${totalTEOM},${totalTVA},${totalTVL}\n`;
+    csv += `Location+ TEOM+TVA,,,${totalLocationTeomTva}\n\n`;
+
+    csv += 'DÉPENSES\n';
+    csv += 'Dates,N°Pièce,Dépenses,Montants\n';
+    currentSheetData.depenses.forEach((d) => {
+      csv += `"${d.date}","${d.pieceNumber}","${d.designation}",${d.montant}\n`;
+    });
+    csv += `Commission Agence ${currentSheetData.commissionRate}%,,,${commissionAgence}\n`;
+    csv += `Total Dépenses,,,${totalDepensesWithCommission}\n`;
+    csv += `Montant à verser,,,${montantAVerser}\n`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `situation-bailleurs-${selectedPeriod.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    link.setAttribute('download', `situation-${currentOwner.lastName}-${selectedMonth}-${selectedYear}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    setNotificationMsg('Export CSV de la situation des bailleurs téléchargé avec succès !');
+    setNotificationMsg(`Bordereau Excel de ${currentOwner.firstName} ${currentOwner.lastName} (${selectedMonth} ${selectedYear}) téléchargé !`);
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  // Open WhatsApp with detailed statement
-  const handleSendWhatsAppStatement = (stmt: typeof landlordStatements[0]) => {
-    const o = stmt.owner;
-    const phone = o.whatsapp || o.phone || '';
+  // Send WhatsApp matching the sheet
+  const handleSendWhatsApp = () => {
+    const phone = currentOwner.whatsapp || currentOwner.phone || '';
     const cleanPhone = phone.replace(/[^0-9]/g, '');
 
-    const message = `Salamalekum M./Mme ${o.firstName} ${o.lastName},
+    const msg = `*Situation ${currentOwner.firstName} ${currentOwner.lastName} de ${selectedMonth.toUpperCase()} ${selectedYear}*
+ETAT DU COMPTE DE GÉRANCE
 
-Voici votre *Situation Financière & Compte de Gérance* SunuGestion pour la période : *${selectedPeriod}*
-
-📊 *DÉCOMPTE FINANCIER :*
+📊 *RECAPITULATIF :*
 ━━━━━━━━━━━━━━━━━━━━
-🟢 *Total Encaissements (Loyers perçus)* : ${stmt.totalEncaissements.toLocaleString('fr-FR')} FCFA
-🔴 *Total Dépenses déductibles (Charges/Travaux)* : ${stmt.totalDepenses.toLocaleString('fr-FR')} FCFA
-🟡 *Commission d'agence (${stmt.commissionRate}%)* : ${stmt.commissionAmount.toLocaleString('fr-FR')} FCFA
+• Montants Loyers HT : *${totalMontantHT.toLocaleString('fr-FR')} CFA*
+• TEOM (3,6%) : *${totalTEOM.toLocaleString('fr-FR')} CFA*
+• TVA (18%) : *${totalTVA.toLocaleString('fr-FR')} CFA*
+• TVL : *${totalTVL.toLocaleString('fr-FR')} CFA*
 ━━━━━━━━━━━━━━━━━━━━
-💎 *SOLDE NET A VOUS REVERSER* : *${stmt.soldeNet.toLocaleString('fr-FR')} FCFA*
+👉 *Total Encaissé (Location+TEOM+TVA) : ${totalLocationTeomTva.toLocaleString('fr-FR')} CFA*
 ━━━━━━━━━━━━━━━━━━━━
-Statut du reversement : ${stmt.isPaid ? '✅ Effectué' : '⏳ En cours de virement'}
+• Total Dépenses & Travaux : *${totalRawDepenses.toLocaleString('fr-FR')} CFA*
+• Commission Agence (${currentSheetData.commissionRate}%) : *${commissionAgence.toLocaleString('fr-FR')} CFA*
+👉 *Total Dépenses Déductibles : ${totalDepensesWithCommission.toLocaleString('fr-FR')} CFA*
+━━━━━━━━━━━━━━━━━━━━
+💎 *MONTANT NET A VERSER : ${montantAVerser.toLocaleString('fr-FR')} CFA*
+━━━━━━━━━━━━━━━━━━━━
+Document officiel généré par ${organization?.name || 'SunuGestion'}.`;
 
-Agence Immobilière : ${organization?.name || 'SunuGestion Sénégal'}
-Pour toute question ou détail sur vos quittances, nous restons à votre entière disposition.`;
-
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-
-    setNotificationMsg(`Relevé préparé et ouvert sur WhatsApp pour ${o.firstName} ${o.lastName} !`);
-    setTimeout(() => setNotificationMsg(null), 4000);
-  };
-
-  // Open Payout Modal
-  const handleOpenPayoutModal = (stmt: typeof landlordStatements[0]) => {
-    setPayoutModalOwner({
-      owner: stmt.owner,
-      soldeNet: stmt.soldeNet
-    });
-    setPayoutAmount(stmt.soldeNet);
-    setPayoutRef(`REV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-  };
-
-  // Confirm Payout
-  const handleConfirmPayout = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payoutModalOwner) return;
-
-    setRecordedPayouts((prev) => ({
-      ...prev,
-      [payoutModalOwner.owner.id]: {
-        date: payoutDate,
-        amount: payoutAmount,
-        method: payoutMethod,
-        ref: payoutRef
-      }
-    }));
-
-    setNotificationMsg(
-      `Reversement de ${payoutAmount.toLocaleString('fr-FR')} FCFA enregistré avec succès pour ${payoutModalOwner.owner.firstName} ${payoutModalOwner.owner.lastName} (${payoutMethod}).`
-    );
-    setTimeout(() => setNotificationMsg(null), 5000);
-    setPayoutModalOwner(null);
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-6 space-y-5 bg-slate-100 min-h-screen">
       {/* Toast Notification */}
       {notificationMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in">
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm animate-in fade-in no-print">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{notificationMsg}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
+      {/* Top Bar with View Switcher and Global Actions */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Landmark className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 text-white flex items-center justify-center shadow-md">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Situation des Bailleurs</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
-                  Compte de Gérance
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  Situation des Bailleurs
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                  Bordereau Officiel Sénégal
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Calcul précis des reversements : <strong>Encaissements - Dépenses - Commissions = Solde Net</strong>.
+                Relevé mensuel conforme : <strong>Location + TEOM + TVA - Dépenses - Commission = Montant à verser</strong>.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Period Selector */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-semibold">
-            <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1" />
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-transparent border-none text-slate-700 font-bold focus:outline-none cursor-pointer pr-2"
+        {/* View Toggle & Actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Toggle between Exact Sheet & Summary Cards */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setActiveView('SPREADSHEET')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'SPREADSHEET'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              {availablePeriods.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Bordereau Conforme</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('CARDS')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'CARDS'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Vue Synthèse Bailleurs</span>
+            </button>
           </div>
 
-          {/* Export CSV Button */}
           <button
             type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all cursor-pointer"
+            onClick={handleExportExcelSheet}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors cursor-pointer"
+            title="Télécharger en CSV / Excel"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Exporter CSV</span>
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Imprimer ce bordereau"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Imprimer</span>
           </button>
         </div>
       </div>
 
-      {/* Consolidated Master KPI Cards (Encaissements - Dépenses = Solde Net) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Encaissements */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Encaissements Bailleurs</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-emerald-600">
-              +{globalEncaissements.toLocaleString('fr-FR')} <span className="text-sm font-semibold">FCFA</span>
+      {/* MONTHS SELECTOR BAR: DU MOIS DE JANVIER JUSQU'AU MOIS DE DECEMBRE */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm no-print">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5 mb-2.5">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+              Sélection du Mois (Janvier à Décembre {selectedYear}) :
             </span>
-            <p className="text-[11px] text-slate-400 mt-1">Loyers effectivement recouvrés</p>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
+
+          {/* Landlord selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 hidden sm:inline">Bailleur :</span>
+            <select
+              value={currentOwnerId}
+              onChange={(e) => setCurrentOwnerId(e.target.value)}
+              className="text-xs font-black bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.firstName} {o.lastName}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Dépenses */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-rose-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Dépenses Déductibles</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-              <TrendingDown className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-rose-600">
-              -{globalDepenses.toLocaleString('fr-FR')} <span className="text-sm font-semibold">FCFA</span>
-            </span>
-            <p className="text-[11px] text-slate-400 mt-1">Charges, entretien, réparations immeubles</p>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-rose-500" />
-        </div>
-
-        {/* Commissions Agence */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-amber-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">3. Commissions Agence</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <DollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-amber-600">
-              -{globalCommissions.toLocaleString('fr-FR')} <span className="text-sm font-semibold">FCFA</span>
-            </span>
-            <p className="text-[11px] text-slate-400 mt-1">Honoraires de gestion (8% moy.)</p>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
-        </div>
-
-        {/* Solde Net à Reverser */}
-        <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-200 uppercase tracking-wider">4. Solde Net Bailleurs</span>
-            <div className="w-8 h-8 rounded-lg bg-white/10 text-amber-300 flex items-center justify-center">
-              <Landmark className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-white">
-              {globalSoldeNet.toLocaleString('fr-FR')} <span className="text-sm font-semibold text-blue-200">FCFA</span>
-            </span>
-            <p className="text-[11px] text-blue-300 mt-1">Total net à virer aux propriétaires</p>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-400" />
-        </div>
-      </div>
-
-      {/* Visual Equation Banner */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 font-bold text-slate-700">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
-          <span>Formule comptable certifiée OHADA / Sénégal :</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-          <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-            Encaissements (+{globalEncaissements.toLocaleString('fr-FR')})
-          </span>
-          <span className="text-slate-400 font-bold">-</span>
-          <span className="px-2 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold">
-            Dépenses (-{globalDepenses.toLocaleString('fr-FR')})
-          </span>
-          <span className="text-slate-400 font-bold">-</span>
-          <span className="px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">
-            Commissions (-{globalCommissions.toLocaleString('fr-FR')})
-          </span>
-          <span className="text-slate-400 font-bold">=</span>
-          <span className="px-2.5 py-1 rounded bg-blue-600 text-white font-bold shadow-sm">
-            Solde Net ({globalSoldeNet.toLocaleString('fr-FR')} FCFA)
-          </span>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Rechercher par bailleur, téléphone, immeuble..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <select
-            value={selectedOwnerId}
-            onChange={(e) => setSelectedOwnerId(e.target.value)}
-            className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
-          >
-            <option value="ALL">Tous les Bailleurs ({owners.length})</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.firstName} {o.lastName}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Landlord Statements List */}
-      <div className="space-y-4">
-        {filteredStatements.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
-            <Landmark className="w-10 h-10 text-slate-300 mx-auto" />
-            <h3 className="font-bold text-slate-800 text-sm">Aucun bailleur trouvé</h3>
-            <p className="text-xs text-slate-400">Modifiez votre recherche ou vos filtres.</p>
-          </div>
-        ) : (
-          filteredStatements.map((stmt) => {
-            const isExpanded = expandedOwnerId === stmt.owner.id;
-            const initials = `${(stmt.owner.firstName?.[0] || 'P').toUpperCase()}${(stmt.owner.lastName?.[0] || '').toUpperCase()}`;
-
+        {/* 12 Months Tabs */}
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-1.5">
+          {MONTHS_LIST.map((m) => {
+            const isSelected = selectedMonth === m;
             return (
-              <div
-                key={stmt.owner.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden"
+              <button
+                key={m}
+                type="button"
+                onClick={() => setSelectedMonth(m)}
+                className={`py-2 px-1 text-center rounded-xl text-xs font-extrabold transition-all cursor-pointer border ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm scale-102 ring-2 ring-blue-400/30'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
               >
-                {/* Main Row / Card Header */}
-                <div className="p-5 sm:p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Landlord Info */}
-                    <div className="flex items-start sm:items-center gap-3.5">
-                      <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 font-black text-base flex items-center justify-center ring-2 ring-blue-500/20 shrink-0">
-                        {initials}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-black text-slate-900 text-base">
-                            {stmt.owner.firstName} {stmt.owner.lastName}
-                          </h3>
-                          {stmt.isPaid ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              ✓ Reversement Effectué
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-                              ⏳ En Attente de Virement
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-400" />
-                            {stmt.owner.phone}
-                          </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <Building2 className="w-3 h-3 text-slate-400" />
-                            {stmt.properties.length} bien(s) ({stmt.unitsCount} lot(s))
-                          </span>
-                          <span>•</span>
-                          <span className="font-semibold text-blue-600">
-                            Commission : {stmt.commissionRate}%
-                          </span>
-                          {stmt.owner.bankAccount && (
-                            <>
-                              <span>•</span>
-                              <span className="font-mono text-[11px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                {stmt.owner.bankAccount}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Financial Summary Numbers */}
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Encaissements</span>
-                        <span className="text-sm font-black text-emerald-600">
-                          +{stmt.totalEncaissements.toLocaleString('fr-FR')} F
-                        </span>
-                      </div>
-
-                      <div className="text-slate-300 font-bold">-</div>
-
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Dépenses</span>
-                        <span className="text-sm font-black text-rose-600">
-                          -{stmt.totalDepenses.toLocaleString('fr-FR')} F
-                        </span>
-                      </div>
-
-                      <div className="text-slate-300 font-bold">-</div>
-
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Commissions</span>
-                        <span className="text-sm font-black text-amber-600">
-                          -{stmt.commissionAmount.toLocaleString('fr-FR')} F
-                        </span>
-                      </div>
-
-                      <div className="text-slate-300 font-bold">=</div>
-
-                      <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-sm">
-                        <span className="text-[9px] font-extrabold text-blue-100 uppercase block">Net à Reverser</span>
-                        <span className="text-base font-black">
-                          {stmt.soldeNet.toLocaleString('fr-FR')} F
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3.5 border-t border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedOwnerId(isExpanded ? null : stmt.owner.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-                      >
-                        {isExpanded ? (
-                          <>
-                            <ChevronUp className="w-3.5 h-3.5" />
-                            <span>Masquer les flux</span>
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown className="w-3.5 h-3.5" />
-                            <span>Voir le détail des flux ({stmt.encaissements.length} encaissements, {stmt.depenses.length} dépenses)</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* WhatsApp Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleSendWhatsAppStatement(stmt)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
-                        title="Envoyer la situation par WhatsApp"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>WhatsApp</span>
-                      </button>
-
-                      {/* Official PDF Statement Button */}
-                      <button
-                        type="button"
-                        onClick={() => setStatementToPrint({
-                          owner: stmt.owner,
-                          encaissements: stmt.encaissements,
-                          depenses: stmt.depenses,
-                          totalEncaissements: stmt.totalEncaissements,
-                          totalDepenses: stmt.totalDepenses,
-                          commissionAmount: stmt.commissionAmount,
-                          soldeNet: stmt.soldeNet,
-                          period: selectedPeriod
-                        })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
-                        title="Imprimer le relevé de compte officiel"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Relevé PDF</span>
-                      </button>
-
-                      {/* Payout Action Button */}
-                      {!stmt.isPaid ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPayoutModal(stmt)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                          <span>Enregistrer Reversement</span>
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Reversé le {stmt.payoutInfo?.date} ({stmt.payoutInfo?.method})</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Details Section: Tables for Encaissements & Dépenses */}
-                {isExpanded && (
-                  <div className="bg-slate-50/70 p-5 sm:p-6 border-t border-slate-200 space-y-6 animate-in fade-in duration-200">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Left: Encaissements */}
-                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <h4 className="font-bold text-slate-900 text-xs">
-                              Encaissements de Loyers ({stmt.encaissements.length})
-                            </h4>
-                          </div>
-                          <span className="text-xs font-black text-emerald-600">
-                            +{stmt.totalEncaissements.toLocaleString('fr-FR')} FCFA
-                          </span>
-                        </div>
-
-                        {stmt.encaissements.length === 0 ? (
-                          <p className="text-xs text-slate-400 py-3 text-center">Aucun encaissement sur cette période.</p>
-                        ) : (
-                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                            {stmt.encaissements.map((p) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60 text-xs"
-                              >
-                                <div>
-                                  <p className="font-bold text-slate-800">{p.tenantName}</p>
-                                  <p className="text-[10px] text-slate-500">
-                                    {p.propertyName} {p.unitNumber ? `(${p.unitNumber})` : ''} • {p.date} • {p.method}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-black text-emerald-600">+{p.amountFCFA.toLocaleString('fr-FR')} F</p>
-                                  <span className="text-[9px] font-mono text-slate-400">{p.receiptNumber}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right: Dépenses Immeubles */}
-                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-rose-500" />
-                            <h4 className="font-bold text-slate-900 text-xs">
-                              Dépenses & Travaux Déductibles ({stmt.depenses.length})
-                            </h4>
-                          </div>
-                          <span className="text-xs font-black text-rose-600">
-                            -{stmt.totalDepenses.toLocaleString('fr-FR')} FCFA
-                          </span>
-                        </div>
-
-                        {stmt.depenses.length === 0 ? (
-                          <p className="text-xs text-slate-400 py-3 text-center">Aucune dépense imputée pour ce propriétaire.</p>
-                        ) : (
-                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                            {stmt.depenses.map((e) => (
-                              <div
-                                key={e.id}
-                                className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/60 text-xs"
-                              >
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800">
-                                      {e.category}
-                                    </span>
-                                    <p className="font-bold text-slate-800">{e.description}</p>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">
-                                    {e.propertyName} • {e.vendorName} • {e.date}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-black text-rose-600">-{e.amountFCFA.toLocaleString('fr-FR')} F</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Step-by-Step Accounting Breakdown */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
-                      <h4 className="font-bold text-slate-900 text-xs mb-3">Décompte de clôture du compte de gérance</h4>
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600">1. Total des loyers bruts encaissés</span>
-                          <span className="font-bold text-slate-900">+{stmt.totalEncaissements.toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600">2. Déduction des travaux et dépenses d'entretien</span>
-                          <span className="font-bold text-rose-600">-{stmt.totalDepenses.toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600">3. Honoraires de gestion agence ({stmt.commissionRate}%)</span>
-                          <span className="font-bold text-amber-600">-{stmt.commissionAmount.toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                        <div className="flex justify-between py-2 bg-blue-50/50 px-3 rounded-lg font-bold">
-                          <span className="text-blue-900">SOLDE NET FINAL A REVERSER AU BAILLEUR</span>
-                          <span className="text-blue-700 font-black text-sm">
-                            {stmt.soldeNet.toLocaleString('fr-FR')} FCFA
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                {m}
+              </button>
             );
-          })
-        )}
+          })}
+        </div>
       </div>
 
-      {/* MODAL 1: Enregistrer un Reversement (Payout) */}
-      {payoutModalOwner && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-black text-slate-900 text-base">Enregistrer un Reversement Bailleur</h3>
-                <p className="text-xs text-slate-500">
-                  Versement du solde net à {payoutModalOwner.owner.firstName} {payoutModalOwner.owner.lastName}
-                </p>
-              </div>
+      {/* SPREADSHEET VIEW: EXACT REPLICA OF THE USER'S ATTACHED EXCEL SHEET */}
+      {activeView === 'SPREADSHEET' && (
+        <div className="space-y-4">
+          {/* Quick Toolbar above sheet */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 text-xs no-print">
+            <div className="flex items-center gap-2 font-semibold text-slate-600">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                Affichage actif : <strong>Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth.toUpperCase()} {selectedYear}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setPayoutModalOwner(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                onClick={handleAddEncaissementRow}
+                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <Plus className="w-3 h-3" />
+                <span>+ Ligne Loyer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddDepenseRow}
+                className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>+ Ligne Dépense</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                className="flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                <Share2 className="w-3 h-3" />
+                <span>WhatsApp</span>
               </button>
             </div>
+          </div>
 
-            <form onSubmit={handleConfirmPayout} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Montant Net à Reverser (FCFA)</label>
-                <input
-                  type="number"
-                  required
-                  value={payoutAmount}
-                  onChange={(e) => setPayoutAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          {/* EXACT EXCEL SPREADSHEET TABLE */}
+          <div className="bg-white rounded-2xl border-2 border-black shadow-lg overflow-x-auto print:border-none print:shadow-none p-2 sm:p-4">
+            <div className="min-w-[860px]">
+              <table className="w-full border-collapse text-xs font-sans">
+                {/* 1. TOP HEADER ROW */}
+                <thead>
+                  <tr>
+                    <th
+                      colSpan={7}
+                      className="border-2 border-black py-2.5 px-4 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
+                    >
+                      Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth.toUpperCase()} {selectedYear}
+                    </th>
+                    <th
+                      className="border-2 border-black py-2.5 px-3 text-center text-xs font-black text-slate-900 bg-white w-48 uppercase tracking-wider"
+                    >
+                      ETAT DU COMPTE
+                    </th>
+                  </tr>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1">Moyen de Paiement</label>
-                  <select
-                    value={payoutMethod}
-                    onChange={(e) => setPayoutMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="WAVE">Wave Mobile</option>
-                    <option value="ORANGE_MONEY">Orange Money</option>
-                    <option value="VIREMENT_BANCAIRE">Virement Bancaire</option>
-                    <option value="ESPECES">Espèces / Chèque</option>
-                  </select>
-                </div>
+                  {/* 2. TABLE ENCAISSEMENTS HEADER */}
+                  <tr className="bg-white font-black text-slate-900 text-center">
+                    <th className="border-2 border-black p-1.5 w-24">Dates</th>
+                    <th className="border-2 border-black p-1.5 w-20">N° Pièce</th>
+                    <th className="border-2 border-black p-1.5 text-center">Désignations</th>
+                    <th className="border-2 border-black p-1.5 w-32 text-center">Montants HT</th>
+                    <th className="border-2 border-black p-1.5 w-28 text-center">TEOM 3,6%</th>
+                    <th className="border-2 border-black p-1.5 w-24 text-center">TVA 18%</th>
+                    <th className="border-2 border-black p-1.5 w-24 text-center">TVL</th>
+                    {/* The right column spans through all rows */}
+                    <th rowSpan={16} className="border-2 border-black p-3 align-top bg-slate-50/50">
+                      <div className="space-y-3 text-left">
+                        <div className="border-b border-black pb-2 text-center">
+                          <p className="font-extrabold text-[11px] text-slate-900 uppercase">SOLDE BANCAIRE / CAISSE</p>
+                          <p className="text-[10px] text-slate-500">Mois de {selectedMonth} {selectedYear}</p>
+                        </div>
 
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1">Date du Reversement</label>
-                  <input
-                    type="date"
-                    required
-                    value={payoutDate}
-                    onChange={(e) => setPayoutDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+                        <div className="space-y-1.5 text-[11px]">
+                          <div className="flex justify-between font-bold">
+                            <span>Total Reçu :</span>
+                            <span className="text-emerald-700">+{totalLocationTeomTva.toLocaleString('fr-FR')} F</span>
+                          </div>
+                          <div className="flex justify-between font-bold">
+                            <span>Total Dépensé :</span>
+                            <span className="text-rose-700">-{totalDepensesWithCommission.toLocaleString('fr-FR')} F</span>
+                          </div>
+                          <div className="border-t border-black pt-1 flex justify-between font-black text-xs text-red-600">
+                            <span>Solde Net :</span>
+                            <span>{montantAVerser.toLocaleString('fr-FR')} F</span>
+                          </div>
+                        </div>
 
-              <div>
-                <label className="block text-slate-600 font-bold mb-1">Référence Transaction / N° Bordereau</label>
-                <input
-                  type="text"
-                  value={payoutRef}
-                  onChange={(e) => setPayoutRef(e.target.value)}
-                  placeholder="Ex: WAVE-SN-89271 ou VIR-BOA-2026"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+                        <div className="border-t border-slate-300 pt-2 text-[10px] space-y-1">
+                          <p className="font-bold text-slate-700">Mode de reversement :</p>
+                          <p className="font-mono text-slate-600 bg-white p-1 rounded border border-slate-200">
+                            {currentOwner.bankAccount || 'Virement Wave / Orange Money'}
+                          </p>
+                        </div>
 
-              <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-blue-800 text-[11px] leading-relaxed">
-                Ce reversement marquera la situation du propriétaire comme <strong>Reversée</strong> et mettra à jour l'historique financier de l'agence.
-              </div>
+                        <div className="border-t border-slate-300 pt-3 text-[10px] text-center space-y-8">
+                          <div>
+                            <p className="font-bold text-slate-800">VISA GESTIONNAIRE :</p>
+                            <p className="text-[9px] text-slate-400 italic">Signature certifiée</p>
+                            <div className="h-8" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">ACCORD BAILLEUR :</p>
+                            <p className="text-[9px] text-slate-400 italic">Bon pour décharge</p>
+                            <div className="h-8" />
+                          </div>
+                        </div>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPayoutModalOwner(null)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors"
-                >
-                  Confirmer le Reversement
-                </button>
-              </div>
-            </form>
+                {/* 3. ENCAISSEMENTS ROWS */}
+                <tbody>
+                  {currentSheetData.encaissements.map((r, idx) => (
+                    <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50">
+                      <td className="border border-black p-1 text-[11px] font-medium">{r.date}</td>
+                      <td className="border border-black p-1 text-[11px] font-mono">{r.pieceNumber}</td>
+                      <td className="border border-black p-1 text-center font-medium">
+                        {r.designation.includes('(Août)') ? (
+                          <>
+                            Studio RDC <span className="text-red-600 font-bold">(Août)</span>
+                          </>
+                        ) : (
+                          r.designation
+                        )}
+                      </td>
+                      <td className="border border-black p-1 text-center font-bold">
+                        {r.montantHT > 0 ? `${r.montantHT.toLocaleString('fr-FR')} CFA` : ''}
+                      </td>
+                      <td className="border border-black p-1 text-center font-medium">
+                        {r.teomAmount > 0 ? `${r.teomAmount.toLocaleString('fr-FR')} CFA` : ''}
+                      </td>
+                      <td className="border border-black p-1 text-center font-medium">
+                        {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
+                      </td>
+                      <td className="border border-black p-1 text-center font-medium">
+                        {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Empty rows to match authentic ledger sheet appearance */}
+                  <tr className="h-6">
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                  </tr>
+                  <tr className="h-6">
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                    <td className="border border-black p-1"></td>
+                  </tr>
+
+                  {/* TOTAL ENCAISSEMENTS ROW (CYAN / SKY-BLUE: #00a2e8) */}
+                  <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
+                    <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                      Total
+                    </td>
+                    <td className="border-2 border-black p-1.5 text-center font-black">
+                      {totalMontantHT.toLocaleString('fr-FR')} CFA
+                    </td>
+                    <td className="border-2 border-black p-1.5 text-center font-black">
+                      {totalTEOM.toLocaleString('fr-FR')} CFA
+                    </td>
+                    <td className="border-2 border-black p-1.5 text-center font-black">
+                      {totalTVA.toLocaleString('fr-FR')} CFA
+                    </td>
+                    <td className="border-2 border-black p-1.5 text-center font-black">
+                      {totalTVL.toLocaleString('fr-FR')} CFA
+                    </td>
+                  </tr>
+
+                  {/* RED BANNER ROW: LOCATION + TEOM + TVA */}
+                  <tr className="bg-[#ed1c24] text-black font-black border-2 border-black">
+                    <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black tracking-wide">
+                      Location+ TEOM+TVA
+                    </td>
+                    <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black text-sm">
+                      {totalLocationTeomTva.toLocaleString('fr-FR')} CFA
+                    </td>
+                  </tr>
+
+                  {/* 4. DÉPENSES TABLE HEADER */}
+                  <tr className="bg-white font-black text-slate-900 text-center">
+                    <th className="border-2 border-black p-1.5 w-24">Dates</th>
+                    <th className="border-2 border-black p-1.5 w-20">N°Pièce</th>
+                    <th className="border-2 border-black p-1.5 text-center">Dépenses</th>
+                    <th colSpan={4} className="border-2 border-black p-1.5 text-center">Montants</th>
+                  </tr>
+
+                  {/* DÉPENSES ROWS */}
+                  {currentSheetData.depenses.map((d) => (
+                    <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50">
+                      <td className={`border border-black p-1 text-[11px] font-medium ${d.isRedHighlight ? 'text-red-600 font-bold' : ''}`}>
+                        {d.date}
+                      </td>
+                      <td className="border border-black p-1 text-[11px] font-mono">{d.pieceNumber}</td>
+                      <td className={`border border-black p-1 text-center font-medium ${d.isRedHighlight ? 'text-red-600 font-bold' : ''}`}>
+                        {d.designation}
+                      </td>
+                      <td colSpan={4} className={`border border-black p-1 text-center font-bold ${d.isRedHighlight ? 'text-red-600 font-black' : ''}`}>
+                        {d.montant.toLocaleString('fr-FR')} CFA
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* COMMISSION AGENCE ROW (YELLOW / GOLD: #fff200 / #fef08a) */}
+                  <tr className="bg-[#fff200] text-black font-black text-center border-2 border-black">
+                    <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                      Commission Agence {currentSheetData.commissionRate}%
+                    </td>
+                    <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
+                      {commissionAgence.toLocaleString('fr-FR')} CFA
+                    </td>
+                  </tr>
+
+                  {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
+                  <tr className="bg-[#00a2e8] text-black font-black text-center border-2 border-black">
+                    <td colSpan={3} className="border-2 border-black p-1.5 text-center font-black">
+                      Total Dépenses
+                    </td>
+                    <td colSpan={4} className="border-2 border-black p-1.5 text-center font-black">
+                      {totalDepensesWithCommission.toLocaleString('fr-FR')} CFA
+                    </td>
+                  </tr>
+
+                  {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
+                  <tr className="bg-[#ed1c24] text-black font-black text-center border-2 border-black">
+                    <td colSpan={3} className="border-2 border-black p-2 text-center font-black text-sm tracking-wide">
+                      Montant à verser
+                    </td>
+                    <td colSpan={4} className="border-2 border-black p-2 text-center font-black text-sm">
+                      {montantAVerser.toLocaleString('fr-FR')} CFA
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: Relevé Officiel de Situation Bailleur (Prêt pour Impression / PDF) */}
-      {statementToPrint && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-6 my-8">
-            {/* Top Modal Controls */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 no-print">
-              <span className="font-bold text-xs text-slate-500 uppercase tracking-wider">Aperçu du Relevé de Compte Propriétaire</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimer le Relevé</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatementToPrint(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      {/* SYNTHESIS CARDS VIEW (All landlords overview) */}
+      {activeView === 'CARDS' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+            <div className="relative w-full max-w-md">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Rechercher un bailleur..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
+            <span className="text-xs font-bold text-slate-500">{owners.length} Bailleurs Référencés</span>
+          </div>
 
-            {/* Printable Content Container */}
-            <div className="space-y-6 printable-document text-slate-800">
-              {/* Official Header */}
-              <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight">{organization?.name || 'SUNUGESTION IMMOBILIÈRE SÉNÉGAL'}</h2>
-                  <p className="text-xs text-slate-600 mt-0.5">{organization?.address || 'Immeuble Teranga, Voie de Dégagement Nord (VDN), Dakar'}</p>
-                  <p className="text-[11px] text-slate-500">
-                    Tél : {organization?.phone || '+221 33 800 00 00'} • NINEA : {organization?.ninea || '009845123 2G3'} • RCCM : {organization?.rccm || 'SN.DKR.2023.B.1120'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="px-3 py-1 rounded bg-slate-900 text-white font-black text-xs uppercase tracking-wider block">
-                    COMPTE DE GÉRANCE
-                  </span>
-                  <span className="text-xs font-bold text-slate-600 mt-1 block">
-                    Période : {statementToPrint.period}
-                  </span>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {owners
+              .filter((o) => `${o.firstName} ${o.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((o) => {
+                const initials = `${(o.firstName?.[0] || 'B').toUpperCase()}${(o.lastName?.[0] || '').toUpperCase()}`;
+                const isCurrent = o.id === currentOwnerId;
 
-              {/* Landlord & Agency Info Grid */}
-              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">PROPRIÉTAIRE BAILLEUR :</span>
-                  <p className="font-black text-slate-900 text-sm">{statementToPrint.owner.firstName} {statementToPrint.owner.lastName}</p>
-                  <p className="text-slate-600">Téléphone : {statementToPrint.owner.phone}</p>
-                  <p className="text-slate-600">Email : {statementToPrint.owner.email}</p>
-                  {statementToPrint.owner.bankAccount && (
-                    <p className="text-slate-600 font-mono text-[11px]">RIB / Compte : {statementToPrint.owner.bankAccount}</p>
-                  )}
-                </div>
+                return (
+                  <div
+                    key={o.id}
+                    className={`bg-white p-5 rounded-2xl border transition-all ${
+                      isCurrent ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md' : 'border-slate-200 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm flex items-center justify-center">
+                          {initials}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-sm">{o.firstName} {o.lastName}</h3>
+                          <p className="text-[10px] text-slate-400">{o.phone}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
+                        {o.commissionRatePercent ?? 10}% Com.
+                      </span>
+                    </div>
 
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">MANDAT DE GESTION :</span>
-                  <p className="font-bold text-slate-800">Agence : {organization?.name || 'SunuGestion'}</p>
-                  <p className="text-slate-600">Taux de commission convenu : <strong>{statementToPrint.owner.commissionRatePercent ?? 8}%</strong></p>
-                  <p className="text-slate-600">Date du relevé : {new Date().toLocaleDateString('fr-FR')}</p>
-                </div>
-              </div>
+                    <div className="mt-3 text-xs text-slate-600 space-y-1">
+                      <p>Mois actif : <strong>{selectedMonth} {selectedYear}</strong></p>
+                      <p className="text-[11px] text-slate-500 truncate">{o.notes || 'Gestion immobilière Dakar'}</p>
+                    </div>
 
-              {/* Tables of Encaissements */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-1">
-                  1. Encaissements de Loyers (Crédit Bailleur)
-                </h4>
-                <table className="w-full text-left text-xs border border-slate-200">
-                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <tr>
-                      <th className="p-2">Date</th>
-                      <th className="p-2">Locataire</th>
-                      <th className="p-2">Bien / Lot</th>
-                      <th className="p-2">Quittance</th>
-                      <th className="p-2 text-right">Montant (FCFA)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {statementToPrint.encaissements.map((p) => (
-                      <tr key={p.id}>
-                        <td className="p-2">{p.date}</td>
-                        <td className="p-2 font-medium">{p.tenantName}</td>
-                        <td className="p-2">{p.propertyName} {p.unitNumber}</td>
-                        <td className="p-2 font-mono text-[10px]">{p.receiptNumber}</td>
-                        <td className="p-2 text-right font-bold text-emerald-700">+{p.amountFCFA.toLocaleString('fr-FR')}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-emerald-50/60 font-bold">
-                      <td colSpan={4} className="p-2 text-right">Total Encaissements Bruts :</td>
-                      <td className="p-2 text-right font-black text-emerald-800">+{statementToPrint.totalEncaissements.toLocaleString('fr-FR')} FCFA</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Tables of Dépenses */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-1">
-                  2. Dépenses & Travaux Déductibles (Débit Bailleur)
-                </h4>
-                <table className="w-full text-left text-xs border border-slate-200">
-                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <tr>
-                      <th className="p-2">Date</th>
-                      <th className="p-2">Catégorie</th>
-                      <th className="p-2">Libellé & Prestataire</th>
-                      <th className="p-2 text-right">Montant (FCFA)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {statementToPrint.depenses.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="p-3 text-center text-slate-400">Aucune dépense déductible sur cette période.</td>
-                      </tr>
-                    ) : (
-                      statementToPrint.depenses.map((e) => (
-                        <tr key={e.id}>
-                          <td className="p-2">{e.date}</td>
-                          <td className="p-2 font-medium">{e.category}</td>
-                          <td className="p-2">{e.description} ({e.vendorName})</td>
-                          <td className="p-2 text-right font-bold text-rose-700">-{e.amountFCFA.toLocaleString('fr-FR')}</td>
-                        </tr>
-                      ))
-                    )}
-                    <tr className="bg-rose-50/60 font-bold">
-                      <td colSpan={3} className="p-2 text-right">Total Dépenses :</td>
-                      <td className="p-2 text-right font-black text-rose-800">-{statementToPrint.totalDepenses.toLocaleString('fr-FR')} FCFA</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Recap Balance Box */}
-              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span>Total Encaissements Bruts :</span>
-                  <span>+{statementToPrint.totalEncaissements.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span>Moins Dépenses et Travaux :</span>
-                  <span>-{statementToPrint.totalDepenses.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span>Moins Commission d'Agence ({statementToPrint.owner.commissionRatePercent ?? 8}%) :</span>
-                  <span>-{statementToPrint.commissionAmount.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-                <div className="border-t border-slate-700 pt-2 flex justify-between text-sm font-black">
-                  <span className="text-amber-300">NET A REVERSER AU BAILLEUR :</span>
-                  <span className="text-amber-300 text-base">{statementToPrint.soldeNet.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-              </div>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-8 pt-8 text-xs">
-                <div className="border-t border-slate-300 pt-2">
-                  <p className="font-bold text-slate-800">Pour l'Agence Gestionnaire :</p>
-                  <p className="text-[10px] text-slate-500 mt-1">Cachet et signature certifiée</p>
-                  <div className="h-14" />
-                </div>
-                <div className="border-t border-slate-300 pt-2 text-right">
-                  <p className="font-bold text-slate-800">Le Propriétaire Bailleur :</p>
-                  <p className="text-[10px] text-slate-500 mt-1">Bon pour accord et décharge</p>
-                  <div className="h-14" />
-                </div>
-              </div>
-            </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentOwnerId(o.id);
+                          setActiveView('SPREADSHEET');
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Ouvrir Bordereau ({selectedMonth})</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
