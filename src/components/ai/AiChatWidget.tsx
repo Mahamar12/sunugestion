@@ -1,3 +1,5 @@
 'use client';
 
-export { default } from './SunuAiAssistant';
+export default function AiChatWidget() {
+  return null;
+}

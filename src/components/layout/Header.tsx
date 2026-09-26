@@ -20,8 +20,7 @@ import {
   Wrench,
   UserPlus,
   Menu,
-  Calendar,
-  Sparkles
+  Calendar
 } from 'lucide-react';
 
 export default function Header() {
@@ -163,21 +162,6 @@ export default function Header() {
           <span>Supabase Cloud Actif</span>
         </div>
 
-        {/* Sunu IA Assistant Launcher Button */}
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('open-sunu-ai'));
-            }
-          }}
-          className="flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-lg shadow-sm shadow-blue-500/20 transition-all cursor-pointer group"
-          title="Ouvrir Sunu IA (Assistant Vocal & Texte en Français & Wolof)"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse shrink-0" />
-          <span className="hidden sm:inline font-bold">Sunu IA</span>
-          <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded font-mono hidden md:inline">FR / Wolof</span>
-        </button>
 
         {/* Quick Action Payment Button */}
         <button
