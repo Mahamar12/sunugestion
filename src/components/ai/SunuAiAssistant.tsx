@@ -404,6 +404,31 @@ ${tenantListSummary}`,
       };
     }
 
+    // 5.b SITUATION DES BAILLEURS (ENCAISSEMENTS - DÉPENSES = SOLDE NET)
+    if (
+      q.includes('situation') ||
+      q.includes('bailleur') ||
+      q.includes('gérance') ||
+      q.includes('reversement') ||
+      q.includes('payout') ||
+      (q.includes('encaissement') && (q.includes('dépense') || q.includes('depense')))
+    ) {
+      const totalCol = payments.reduce((acc, p) => acc + (p.amountFCFA || 0), 0);
+      const totalExp = expenses.reduce((acc, e) => acc + (e.amountFCFA || 0), 0);
+      const totalComm = Math.round(totalCol * 0.08);
+      const netPayout = Math.max(0, totalCol - totalExp - totalComm);
+
+      return {
+        text: detectedWolof
+          ? `🏛️ **Situation bu Bailleurs yi (Compte de Gérance) :**\n• **Encaissements (Loyers encaissés)** : +${totalCol.toLocaleString('fr-FR')} FCFA\n• **Dépenses (Charges & Travaux déductibles)** : -${totalExp.toLocaleString('fr-FR')} FCFA\n• **Commissions Agence (8%)** : -${totalComm.toLocaleString('fr-FR')} FCFA\n━━━━━━━━━━━━━━━━━━━━\n💎 **SOLDE NET A REVERSER** : **${netPayout.toLocaleString('fr-FR')} FCFA**\n\nMën nga xool situation bu chaque bailleur, imprimer relevé PDF wala envoyer ko ci WhatsApp !`
+          : `🏛️ **Situation Financière des Bailleurs (Compte de Gérance) :**\n• **1. Total Encaissements (Loyers perçus)** : +${totalCol.toLocaleString('fr-FR')} FCFA\n• **2. Total Dépenses déductibles (Charges & Travaux)** : -${totalExp.toLocaleString('fr-FR')} FCFA\n• **3. Commissions d'agence (8%)** : -${totalComm.toLocaleString('fr-FR')} FCFA\n━━━━━━━━━━━━━━━━━━━━\n💎 **SOLDE NET A REVERSER AUX BAILLEURS** : **${netPayout.toLocaleString('fr-FR')} FCFA**\n\nVous pouvez consulter la ventilation complète par bailleur, télécharger les relevés officiels PDF et enregistrer les reversements.`,
+        actions: [
+          { type: 'NAVIGATE' as const, label: '🏛️ Ouvrir Situation des Bailleurs', url: '/app/landlord-statements' },
+          { type: 'NAVIGATE' as const, label: '👥 Voir les Propriétaires', url: '/app/owners' }
+        ]
+      };
+    }
+
     // 6. TOTAL LOYERS & FINANCES (GLOBAL SUMMARY)
     if (
       q.includes('total') ||

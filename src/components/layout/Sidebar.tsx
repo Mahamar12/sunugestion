@@ -26,6 +26,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Landmark,
   LogOut,
   ChevronRight,
   X
@@ -58,6 +59,7 @@ export default function Sidebar() {
     { label: 'Paiements', href: '/app/payments', icon: CreditCard },
     { label: 'Impayés & Relances', href: '/app/arrears', icon: AlertTriangle, badge: 'Urgent' },
     { label: 'Dépenses', href: '/app/expenses', icon: Receipt },
+    { label: 'Situation des bailleurs', href: '/app/landlord-statements', icon: Landmark, badge: 'Solde Net' },
     { label: 'Prestataires', href: '/app/vendors', icon: UserCog },
     { label: 'Documents & PDF', href: '/app/documents', icon: FileBox },
     { label: 'Rapports & Comptabilité', href: '/app/reports', icon: BarChart3 },
@@ -70,6 +72,7 @@ export default function Sidebar() {
     navItems = [
       { label: 'Mon Espace Propriétaire', href: '/owner/dashboard', icon: LayoutDashboard },
       { label: 'Mes Biens Immobiliers', href: '/owner/properties', icon: Building2 },
+      { label: 'Situation & Relevés', href: '/app/landlord-statements', icon: Landmark, badge: 'Solde Net' },
       { label: 'Revenus & Payouts', href: '/owner/payments', icon: CreditCard },
       { label: 'Rapports Financiers', href: '/owner/reports', icon: BarChart3 },
       { label: 'Mes Documents', href: '/owner/documents', icon: FileBox },
