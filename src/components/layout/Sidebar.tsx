@@ -49,7 +49,6 @@ export default function Sidebar() {
   // Define navigation links based on RBAC role
   let navItems = [
     { label: 'Tableau de bord', href: '/app/dashboard', icon: LayoutDashboard },
-    { label: 'Sunu IA (Assistant Vocal)', href: '#sunu-ai', icon: Sparkles, badge: 'FR / Wolof', isAi: true },
     { label: 'Biens immobiliers', href: '/app/properties', icon: Building2 },
     { label: 'Logements & Unités', href: '/app/units', icon: Home },
     { label: 'Locataires', href: '/app/tenants', icon: Users },
@@ -168,38 +167,8 @@ export default function Sidebar() {
         {/* Nav links */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
-            const isAi = (item as any).isAi;
-            const isActive = !isAi && (pathname === item.href || (item.href !== '/app/dashboard' && pathname.startsWith(item.href)));
+            const isActive = pathname === item.href || (item.href !== '/app/dashboard' && pathname.startsWith(item.href));
             const Icon = item.icon;
-
-            if (isAi) {
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => {
-                    setIsMobileSidebarOpen(false);
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('open-sunu-ai'));
-                    }
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600/25 via-indigo-600/25 to-purple-600/25 text-blue-200 hover:text-white hover:from-blue-600/40 hover:to-purple-600/40 border border-blue-500/30 transition-all group text-left cursor-pointer shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-amber-300 animate-pulse transition-transform group-hover:scale-110" />
-                    <span className="font-bold bg-gradient-to-r from-blue-200 via-indigo-100 to-amber-200 bg-clip-text text-transparent">
-                      {item.label}
-                    </span>
-                  </div>
-
-                  {item.badge && (
-                    <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            }
 
             return (
               <Link
