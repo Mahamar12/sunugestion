@@ -547,131 +547,209 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
 
       {/* Inline Add Encaissement Form */}
       {showAddEncForm && (
-        <form onSubmit={handleSaveEncaissement} className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
-          <div className="flex items-center justify-between font-bold text-emerald-900">
-            <span>Ajouter une ligne au tableau Encaissements :</span>
-            <button type="button" onClick={() => setShowAddEncForm(false)} className="text-slate-400 hover:text-slate-600">
+        <form onSubmit={handleSaveEncaissement} className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-3 text-xs animate-in fade-in no-print">
+          <div className="flex items-center justify-between font-bold text-emerald-950 pb-1 border-b border-emerald-200">
+            <span className="flex items-center gap-1.5 text-xs">
+              <Plus className="w-4 h-4 text-emerald-700" />
+              Ajouter une ligne au tableau Encaissements :
+            </span>
+            <button type="button" onClick={() => setShowAddEncForm(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Date (ex: 05/09/2026)"
-              value={encDate}
-              onChange={(e) => setEncDate(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="text"
-              placeholder="N° Pièce (ex: 261)"
-              value={encPiece}
-              onChange={(e) => setEncPiece(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="text"
-              required
-              placeholder="Désignation (ex: Appartement 3ème droite)"
-              value={encDesignation}
-              onChange={(e) => setEncDesignation(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs sm:col-span-2"
-            />
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-3">
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex: 05/09/2026"
+                value={encDate}
+                onChange={(e) => setEncDate(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                N° Pièce
+              </label>
+              <input
+                type="text"
+                placeholder="ex: 261"
+                value={encPiece}
+                onChange={(e) => setEncPiece(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-6">
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                Désignation <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex: Appartement 3ème droite"
+                value={encDesignation}
+                onChange={(e) => setEncDesignation(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
-            <input
-              type="number"
-              required
-              placeholder="Montant HT"
-              value={encMontantHT}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                setEncMontantHT(val);
-                setEncTeom(Math.round(val * 0.036));
-              }}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs font-bold"
-            />
-            <input
-              type="number"
-              placeholder="TEOM"
-              value={encTeom}
-              onChange={(e) => setEncTeom(Number(e.target.value))}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="number"
-              placeholder="TVA 18%"
-              value={encTva}
-              onChange={(e) => setEncTva(Number(e.target.value))}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="number"
-              placeholder="TVL"
-              value={encTvl}
-              onChange={(e) => setEncTvl(Number(e.target.value))}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <button
-              type="submit"
-              className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs col-span-2 sm:col-span-1"
-            >
-              Enregistrer
-            </button>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                Montant hors taxe <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                required
+                placeholder="Montant HT"
+                value={encMontantHT}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setEncMontantHT(val);
+                  setEncTeom(Math.round(val * 0.036));
+                }}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                TOM
+              </label>
+              <input
+                type="number"
+                placeholder="TOM (TEOM)"
+                value={encTeom}
+                onChange={(e) => setEncTeom(Number(e.target.value))}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                TVA
+              </label>
+              <input
+                type="number"
+                placeholder="TVA 18%"
+                value={encTva}
+                onChange={(e) => setEncTva(Number(e.target.value))}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-emerald-900 mb-1">
+                TVL
+              </label>
+              <input
+                type="number"
+                placeholder="TVL"
+                value={encTvl}
+                onChange={(e) => setEncTvl(Number(e.target.value))}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <button
+                type="submit"
+                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold rounded-lg text-xs shadow-sm transition-colors cursor-pointer"
+              >
+                Enregistrer
+              </button>
+            </div>
           </div>
         </form>
       )}
 
       {/* Inline Add Depense Form */}
       {showAddDepForm && (
-        <form onSubmit={handleSaveDepense} className="p-3 bg-rose-50 border border-rose-300 rounded-xl space-y-2 text-xs animate-in fade-in no-print">
-          <div className="flex items-center justify-between font-bold text-rose-900">
-            <span>Ajouter une ligne au tableau Dépenses :</span>
-            <button type="button" onClick={() => setShowAddDepForm(false)} className="text-slate-400 hover:text-slate-600">
+        <form onSubmit={handleSaveDepense} className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl space-y-3 text-xs animate-in fade-in no-print">
+          <div className="flex items-center justify-between font-bold text-rose-950 pb-1 border-b border-rose-200">
+            <span className="flex items-center gap-1.5 text-xs">
+              <Plus className="w-4 h-4 text-rose-700" />
+              Ajouter une ligne au tableau Dépenses :
+            </span>
+            <button type="button" onClick={() => setShowAddDepForm(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Date (ex: 15/09/2026)"
-              value={depDate}
-              onChange={(e) => setDepDate(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="text"
-              placeholder="N° Pièce (optionnel)"
-              value={depPiece}
-              onChange={(e) => setDepPiece(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs"
-            />
-            <input
-              type="text"
-              required
-              placeholder="Désignation de la dépense"
-              value={depDesignation}
-              onChange={(e) => setDepDesignation(e.target.value)}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs sm:col-span-2"
-            />
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-3">
+              <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex: 15/09/2026"
+                value={depDate}
+                onChange={(e) => setDepDate(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                N° Pièce
+              </label>
+              <input
+                type="text"
+                placeholder="Optionnel (ex: Facture 42)"
+                value={depPiece}
+                onChange={(e) => setDepPiece(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-6">
+              <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                Désignation <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex: Réparation plomberie"
+                value={depDesignation}
+                onChange={(e) => setDepDesignation(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              />
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-            <input
-              type="number"
-              required
-              placeholder="Montant (CFA)"
-              value={depMontant}
-              onChange={(e) => setDepMontant(Number(e.target.value))}
-              className="p-1.5 bg-white border border-slate-300 rounded text-xs font-bold"
-            />
-            <button
-              type="submit"
-              className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-xs"
-            >
-              Enregistrer la dépense
-            </button>
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <div className="sm:col-span-6">
+              <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                Montant (CFA) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                required
+                placeholder="Montant en FCFA"
+                value={depMontant}
+                onChange={(e) => setDepMontant(Number(e.target.value))}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-6">
+              <button
+                type="submit"
+                className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-extrabold rounded-lg text-xs shadow-sm transition-colors cursor-pointer"
+              >
+                Enregistrer la dépense
+              </button>
+            </div>
           </div>
         </form>
       )}
