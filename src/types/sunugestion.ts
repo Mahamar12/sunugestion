@@ -313,7 +313,7 @@ export interface Vendor {
   whatsapp: string;
   trade: 'PLOMBIER' | 'ELECTRICIEN' | 'MACON' | 'PEINTRE' | 'MENUISIER' | 'FRIGORISTE' | 'NETTOYEUR' | 'JARDINIER' | 'SERRURIER' | 'TECHNICIEN';
   zone: string; // e.g. "Dakar & Almadies"
-  hourlyRateFCFA: number;
+  hourlyRateFCFA?: number;
   interventionsCount: number;
   notes?: string;
 }

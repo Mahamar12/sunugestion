@@ -17,7 +17,6 @@ export default function VendorsPage() {
   const [whatsapp, setWhatsapp] = useState('+221 77 ');
   const [trade, setTrade] = useState<Vendor['trade']>('PLOMBIER');
   const [zone, setZone] = useState('Dakar Plateau, Almadies, Mermoz');
-  const [hourlyRate, setHourlyRate] = useState(15000);
   const [notes, setNotes] = useState('');
 
   const handleAddVendor = (e: React.FormEvent) => {
@@ -28,7 +27,6 @@ export default function VendorsPage() {
       whatsapp: whatsapp || phone,
       trade,
       zone,
-      hourlyRateFCFA: Number(hourlyRate),
       interventionsCount: 0,
       notes,
     });
@@ -108,9 +106,6 @@ export default function VendorsPage() {
               </p>
               <p className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-slate-400" /> {v.zone}
-              </p>
-              <p className="font-bold text-emerald-700">
-                Tarif horaire moyen: {v.hourlyRateFCFA.toLocaleString('fr-FR')} FCFA / h
               </p>
               {v.notes && (
                 <p className="text-[11px] text-slate-500 italic mt-1 bg-slate-50 p-2 rounded-lg">
@@ -200,33 +195,21 @@ export default function VendorsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Corps de Métier</label>
-                  <select
-                    value={trade}
-                    onChange={(e) => setTrade(e.target.value as any)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
-                  >
-                    <option value="PLOMBIER">Plombier</option>
-                    <option value="ELECTRICIEN">Électricien</option>
-                    <option value="FRIGORISTE">Frigoriste</option>
-                    <option value="SERRURIER">Serrurier</option>
-                    <option value="MENUISIER">Menuisier</option>
-                    <option value="PEINTRE">Peintre</option>
-                    <option value="AUTRE">Autre Artisan</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tarif Horaire (FCFA)</label>
-                  <input
-                    type="number"
-                    value={hourlyRate}
-                    onChange={(e) => setHourlyRate(Number(e.target.value))}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Corps de Métier</label>
+                <select
+                  value={trade}
+                  onChange={(e) => setTrade(e.target.value as any)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                >
+                  <option value="PLOMBIER">Plombier</option>
+                  <option value="ELECTRICIEN">Électricien</option>
+                  <option value="FRIGORISTE">Frigoriste</option>
+                  <option value="SERRURIER">Serrurier</option>
+                  <option value="MENUISIER">Menuisier</option>
+                  <option value="PEINTRE">Peintre</option>
+                  <option value="AUTRE">Autre Artisan</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

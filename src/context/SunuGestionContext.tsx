@@ -1611,6 +1611,23 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
           setPayments(parsedPayments);
         }
       }
+      const cachedVendors = localStorage.getItem('sunu_vendors');
+      let deletedVendorIds: string[] = [];
+      try {
+        const storedV = localStorage.getItem('sunu_deleted_vendors');
+        if (storedV) deletedVendorIds = JSON.parse(storedV);
+      } catch (e) {}
+
+      if (cachedVendors !== null) {
+        try {
+          const parsedVendors = JSON.parse(cachedVendors);
+          if (Array.isArray(parsedVendors)) {
+            setVendors(parsedVendors.filter((v: Vendor) => !deletedVendorIds.includes(v.id)));
+          }
+        } catch (e) {}
+      } else if (deletedVendorIds.length > 0) {
+        setVendors((prev) => prev.filter((v) => !deletedVendorIds.includes(v.id)));
+      }
     } catch (e) {
       console.warn('LocalStorage hydration notice:', e);
     }
@@ -1705,9 +1722,29 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
         }
         if (pay && pay.length > 0) setPayments(pay);
         if (exp && exp.length > 0) setExpenses(exp);
-        if (v && v.length > 0) setVendors(v);
+        if (v && Array.isArray(v)) {
+          let deletedVendorIds: string[] = [];
+          try {
+            const storedV = localStorage.getItem('sunu_deleted_vendors');
+            if (storedV) deletedVendorIds = JSON.parse(storedV);
+          } catch (e) {}
 
-        // Synchronisation des échéances de loyers avec les vrais locataires
+          const hasLocalVendors = typeof window !== 'undefined' && localStorage.getItem('sunu_vendors') !== null;
+          const filteredVendors = v.filter((item) => !deletedVendorIds.includes(item.id));
+          if (filteredVendors.length > 0) {
+            setVendors(filteredVendors);
+            try {
+              localStorage.setItem('sunu_vendors', JSON.stringify(filteredVendors));
+            } catch (e) {}
+          } else if (hasLocalVendors) {
+            try {
+              const localParsed = JSON.parse(localStorage.getItem('sunu_vendors') || '[]');
+              setVendors(localParsed.filter((item: Vendor) => !deletedVendorIds.includes(item.id)));
+            } catch (e) {}
+          } else if (deletedVendorIds.length > 0) {
+            setVendors(INITIAL_VENDORS.filter((item) => !deletedVendorIds.includes(item.id)));
+          }
+        }
         const activeTenantsList = (t && Array.isArray(t) ? t : []).filter((item) => !deletedTenantIds.includes(item.id));
         const activeLeasesList = (l && Array.isArray(l) ? l : []).filter((item) => !deletedLeaseIds.includes(item.id) && !deletedTenantIds.includes(item.tenantId));
 
@@ -2959,7 +2996,13 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
       id: newId,
       agencyId: 'org-1',
     };
-    setVendors((prev) => [newVendor, ...prev]);
+    setVendors((prev) => {
+      const updated = [newVendor, ...prev];
+      try {
+        localStorage.setItem('sunu_vendors', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     addAuditLog('CREATION_PRESTATAIRE', `Ajout du prestataire ${newVendor.name} (${newVendor.trade})`, 'ORGANISATION');
 
     const notif: NotificationItem = {
@@ -2983,7 +3026,24 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     const vendorToDelete = vendors.find((v) => v.id === vendorId);
     if (!vendorToDelete) return;
 
-    setVendors((prev) => prev.filter((v) => v.id !== vendorId));
+    setVendors((prev) => {
+      const updated = prev.filter((v) => v.id !== vendorId);
+      try {
+        localStorage.setItem('sunu_vendors', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      let deletedList: string[] = [];
+      const stored = localStorage.getItem('sunu_deleted_vendors');
+      if (stored) deletedList = JSON.parse(stored);
+      if (!deletedList.includes(vendorId)) {
+        deletedList.push(vendorId);
+        localStorage.setItem('sunu_deleted_vendors', JSON.stringify(deletedList));
+      }
+    } catch (e) {}
+
     addAuditLog('SUPPRESSION_PRESTATAIRE', `Suppression du prestataire ${vendorToDelete.name}`, 'ORGANISATION');
 
     if (SupabaseDbService.isConfigured()) {
