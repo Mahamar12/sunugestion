@@ -12,7 +12,6 @@ import {
   X,
   Trash2,
   RefreshCw,
-  CreditCard,
   Banknote,
   UserCheck,
   Edit2,
@@ -81,7 +80,7 @@ export default function LandlordStatementsPage() {
     organization
   } = useSunuGestion();
 
-  // Active Month: default to "Septembre" as requested in user's image
+  // Active Month: default to "Septembre"
   const [selectedMonth, setSelectedMonth] = useState<string>('Septembre');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
@@ -135,7 +134,10 @@ export default function LandlordStatementsPage() {
   const [depDesignation, setDepDesignation] = useState('');
   const [depMontant, setDepMontant] = useState<number>(25000);
 
-  // Modals for "Modifier"
+  // Modals for "Modifier" / "Supprimer"
+  const [isManageEncModalOpen, setIsManageEncModalOpen] = useState(false);
+  const [isManageDepModalOpen, setIsManageDepModalOpen] = useState(false);
+
   const [editingEncRow, setEditingEncRow] = useState<EncaissementRow | null>(null);
   const [editEncDate, setEditEncDate] = useState('');
   const [editEncPiece, setEditEncPiece] = useState('');
@@ -209,7 +211,7 @@ export default function LandlordStatementsPage() {
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('sunu_landlord_statements_store_v3');
+      const saved = localStorage.getItem('sunu_landlord_statements_store_v4');
       if (saved) {
         setManualStore(JSON.parse(saved));
       }
@@ -223,7 +225,7 @@ export default function LandlordStatementsPage() {
   useEffect(() => {
     if (isHydrated) {
       try {
-        localStorage.setItem('sunu_landlord_statements_store_v3', JSON.stringify(manualStore));
+        localStorage.setItem('sunu_landlord_statements_store_v4', JSON.stringify(manualStore));
       } catch (e) {
         console.error(e);
       }
@@ -467,7 +469,7 @@ export default function LandlordStatementsPage() {
 
   // DELETE ENCAISSEMENT
   const handleDeleteEnc = (id: string) => {
-    if (!confirm("Voulez-vous supprimer cette ligne d'encaissement ?")) return;
+    if (!confirm("Voulez-vous vraiment supprimer cet encaissement ?")) return;
     const updatedList = currentEncaissements.filter((r) => r.id !== id);
 
     setManualStore((prev) => ({
@@ -480,8 +482,10 @@ export default function LandlordStatementsPage() {
       }
     }));
 
-    setEditingEncRow(null);
-    setNotificationMsg('Ligne supprimée.');
+    if (editingEncRow && editingEncRow.id === id) {
+      setEditingEncRow(null);
+    }
+    setNotificationMsg('Encaissement supprimé avec succès.');
     setTimeout(() => setNotificationMsg(null), 3000);
   };
 
@@ -528,7 +532,7 @@ export default function LandlordStatementsPage() {
 
   // DELETE DÉPENSE
   const handleDeleteDep = (id: string) => {
-    if (!confirm('Voulez-vous supprimer cette dépense ?')) return;
+    if (!confirm('Voulez-vous vraiment supprimer cette dépense ?')) return;
     const updatedList = currentDepenses.filter((d) => d.id !== id);
 
     setManualStore((prev) => ({
@@ -541,8 +545,10 @@ export default function LandlordStatementsPage() {
       }
     }));
 
-    setEditingDepRow(null);
-    setNotificationMsg('Dépense supprimée.');
+    if (editingDepRow && editingDepRow.id === id) {
+      setEditingDepRow(null);
+    }
+    setNotificationMsg('Dépense supprimée avec succès.');
     setTimeout(() => setNotificationMsg(null), 3000);
   };
 
@@ -708,7 +714,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </div>
       )}
 
-      {/* TOP CONTROL BAR: BAILLEURS, MOIS (Janvier à Décembre) & ACTIONS */}
+      {/* TOP CONTROL BAR: BAILLEURS, MOIS & ACTIONS */}
       <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-sm space-y-3 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           {/* Landlord Selector */}
@@ -734,7 +740,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
             </span>
           </div>
 
-          {/* Action Buttons: AJOUTS, MODIFIER, VERSEMENT, RELEVÉ PDF */}
+          {/* Action Buttons: AJOUTS, MODIFIER/SUPPRIMER, VERSEMENT, RELEVÉ PDF */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -748,6 +754,17 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
               <span>+ Encaissement</span>
             </button>
 
+            {/* OPTION MODIFIER / SUPPRIMER ENCAISSEMENT */}
+            <button
+              type="button"
+              onClick={() => setIsManageEncModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold rounded-lg border border-blue-200 transition-colors cursor-pointer"
+              title="Modifier ou supprimer un encaissement"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+              <span>Modifier Encaissement</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -758,6 +775,17 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
             >
               <Plus className="w-3.5 h-3.5" />
               <span>+ Dépense</span>
+            </button>
+
+            {/* OPTION MODIFIER / SUPPRIMER DÉPENSE */}
+            <button
+              type="button"
+              onClick={() => setIsManageDepModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold rounded-lg border border-amber-200 transition-colors cursor-pointer"
+              title="Modifier ou supprimer une dépense"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-amber-600" />
+              <span>Modifier Dépense</span>
             </button>
 
             {/* THE REQUESTED: OPTION VERSEMENT BUTTON */}
@@ -804,7 +832,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
           </div>
         </div>
 
-        {/* 12 MONTHS TABS (DU MOIS DE JANVIER JUSQU'AU MOIS DE DECEMBRE) */}
+        {/* 12 MONTHS TABS */}
         <div className="pt-2 border-t border-slate-200">
           <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-1.5">
             <span className="flex items-center gap-1">
@@ -844,6 +872,10 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
             })}
           </div>
         </div>
+
+        <p className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-100">
+          💡 <strong>Astuce :</strong> Vous pouvez aussi cliquer directement sur n&apos;importe quelle ligne du tableau pour la modifier ou la supprimer.
+        </p>
       </div>
 
       {/* Inline Add Encaissement Form */}
@@ -1055,7 +1087,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </form>
       )}
 
-      {/* THE EXACT SPREADSHEET TABLE REPLICA AS REQUESTED BY THE USER */}
+      {/* THE EXACT SPREADSHEET TABLE REPLICA AS REQUESTED BY THE USER - WITHOUT ACTION COLUMN */}
       <div className="bg-white rounded-xl border-2 border-black shadow-lg overflow-x-auto print:border-none print:shadow-none p-1 sm:p-3">
         <div className="min-w-[850px] flex border-2 border-black">
           {/* LEFT: MAIN BORDEREAU SPREADSHEET */}
@@ -1065,14 +1097,14 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                 {/* 1. TOP TITLE HEADER */}
                 <tr>
                   <th
-                    colSpan={8}
+                    colSpan={7}
                     className="border-b-2 border-black py-2 px-3 text-center text-sm font-black text-slate-900 bg-white tracking-wide"
                   >
                     Situation {currentOwner.firstName} {currentOwner.lastName} de {selectedMonth} {selectedYear}
                   </th>
                 </tr>
 
-                {/* 2. ENCAISSEMENTS TABLE HEADER */}
+                {/* 2. ENCAISSEMENTS TABLE HEADER (NO ACTION COLUMN) */}
                 <tr className="bg-white font-black text-slate-900 text-center border-b-2 border-black">
                   <th className="border-r-2 border-black py-1.5 px-2 w-24">Dates</th>
                   <th className="border-r-2 border-black py-1.5 px-2 w-20">N° Pièce</th>
@@ -1080,15 +1112,19 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   <th className="border-r-2 border-black py-1.5 px-2 w-28 text-center">Montants HT</th>
                   <th className="border-r-2 border-black py-1.5 px-2 w-24 text-center">TEOM</th>
                   <th className="border-r-2 border-black py-1.5 px-2 w-24 text-center">TVA 18%</th>
-                  <th className="border-r-2 border-black py-1.5 px-2 w-24 text-center">TVL</th>
-                  <th className="py-1.5 px-2 w-16 text-center text-[10px] text-blue-800 print:hidden">Action</th>
+                  <th className="py-1.5 px-2 w-24 text-center">TVL</th>
                 </tr>
               </thead>
 
               {/* 3. ENCAISSEMENTS ROWS */}
               <tbody>
                 {currentEncaissements.map((r) => (
-                  <tr key={r.id} className="text-slate-900 text-center hover:bg-slate-50 border-b border-black">
+                  <tr
+                    key={r.id}
+                    onClick={() => handleStartEditEnc(r)}
+                    className="text-slate-900 text-center hover:bg-blue-50/80 cursor-pointer transition-colors border-b border-black"
+                    title="Cliquer pour modifier ou supprimer cet encaissement"
+                  >
                     <td className="border-r border-black py-1 px-1.5 text-[11px] font-medium">{r.date}</td>
                     <td className="border-r border-black py-1 px-1.5 text-[11px] font-mono">{r.pieceNumber}</td>
                     <td className="border-r border-black py-1 px-2 text-center font-medium">{r.designation}</td>
@@ -1101,19 +1137,8 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                     <td className="border-r border-black py-1 px-1.5 text-center font-medium">
                       {r.tvaAmount > 0 ? `${r.tvaAmount.toLocaleString('fr-FR')} CFA` : ''}
                     </td>
-                    <td className="border-r border-black py-1 px-1.5 text-center font-medium">
+                    <td className="py-1 px-1.5 text-center font-medium">
                       {r.tvlAmount > 0 ? `${r.tvlAmount.toLocaleString('fr-FR')} CFA` : ''}
-                    </td>
-                    <td className="py-1 px-1 text-center print:hidden">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditEnc(r)}
-                        className="px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 text-[10px] font-bold rounded border border-blue-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
-                        title="Modifier cette ligne d'encaissement"
-                      >
-                        <Edit2 className="w-2.5 h-2.5" />
-                        <span>Modif.</span>
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1127,8 +1152,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                     <td className="border-r border-black p-1"></td>
                     <td className="border-r border-black p-1"></td>
                     <td className="border-r border-black p-1"></td>
-                    <td className="border-r border-black p-1"></td>
-                    <td className="p-1 print:hidden"></td>
+                    <td className="p-1"></td>
                   </tr>
                 ))}
 
@@ -1146,10 +1170,9 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   <td className="border-r-2 border-black py-1 px-1.5 text-center font-black">
                     {totalTVA > 0 ? `${totalTVA.toLocaleString('fr-FR')} CFA` : ''}
                   </td>
-                  <td className="border-r-2 border-black py-1 px-1.5 text-center font-black">
+                  <td className="py-1 px-1.5 text-center font-black">
                     {totalTVL.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="p-1 print:hidden"></td>
                 </tr>
 
                 {/* RED BANNER ROW: LOCATION+ TEOM (EXACT LABEL FROM USER'S IMAGE) */}
@@ -1157,40 +1180,32 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black tracking-wide">
                     Location+ TEOM
                   </td>
-                  <td colSpan={4} className="border-r-2 border-black py-1 px-2 text-center font-black text-xs sm:text-sm">
+                  <td colSpan={4} className="py-1 px-2 text-center font-black text-xs sm:text-sm">
                     {totalLocationPlusTeom.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="p-1 print:hidden"></td>
                 </tr>
 
-                {/* 4. DÉPENSES TABLE HEADER */}
+                {/* 4. DÉPENSES TABLE HEADER (NO ACTION COLUMN) */}
                 <tr className="bg-white font-black text-slate-900 text-center border-b-2 border-black">
                   <th className="border-r-2 border-black py-1.5 px-2 w-24">Dates</th>
                   <th className="border-r-2 border-black py-1.5 px-2 w-20">N°Pièce</th>
                   <th className="border-r-2 border-black py-1.5 px-2 text-center">Dépenses</th>
-                  <th colSpan={4} className="border-r-2 border-black py-1.5 px-2 text-center">Montants</th>
-                  <th className="py-1.5 px-2 w-16 text-center text-[10px] text-rose-800 print:hidden">Action</th>
+                  <th colSpan={4} className="py-1.5 px-2 text-center">Montants</th>
                 </tr>
 
                 {/* DÉPENSES ROWS */}
                 {currentDepenses.map((d) => (
-                  <tr key={d.id} className="text-slate-900 text-center hover:bg-slate-50 border-b border-black">
+                  <tr
+                    key={d.id}
+                    onClick={() => handleStartEditDep(d)}
+                    className="text-slate-900 text-center hover:bg-rose-50/80 cursor-pointer transition-colors border-b border-black"
+                    title="Cliquer pour modifier ou supprimer cette dépense"
+                  >
                     <td className="border-r border-black py-1 px-1.5 text-[11px] font-medium">{d.date}</td>
                     <td className="border-r border-black py-1 px-1.5 text-[11px] font-mono">{d.pieceNumber}</td>
                     <td className="border-r border-black py-1 px-2 text-center font-medium">{d.designation}</td>
-                    <td colSpan={4} className="border-r border-black py-1 px-2 text-center font-bold">
+                    <td colSpan={4} className="py-1 px-2 text-center font-bold">
                       {d.montant > 0 ? `${d.montant.toLocaleString('fr-FR')} CFA` : ''}
-                    </td>
-                    <td className="py-1 px-1 text-center print:hidden">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditDep(d)}
-                        className="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 text-[10px] font-bold rounded border border-rose-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
-                        title="Modifier cette dépense"
-                      >
-                        <Edit2 className="w-2.5 h-2.5" />
-                        <span>Modif.</span>
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1201,8 +1216,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                     <td className="border-r border-black p-1"></td>
                     <td className="border-r border-black p-1"></td>
                     <td className="border-r border-black p-1"></td>
-                    <td colSpan={4} className="border-r border-black p-1"></td>
-                    <td className="p-1 print:hidden"></td>
+                    <td colSpan={4} className="p-1"></td>
                   </tr>
                 ))}
 
@@ -1211,10 +1225,9 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black">
                     Commission Agence {commissionRate}%
                   </td>
-                  <td colSpan={4} className="border-r-2 border-black py-1 px-2 text-center font-black">
+                  <td colSpan={4} className="py-1 px-2 text-center font-black">
                     {commissionAmount.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="p-1 print:hidden"></td>
                 </tr>
 
                 {/* TOTAL DÉPENSES ROW (CYAN / SKY-BLUE: #00a2e8) */}
@@ -1222,44 +1235,40 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   <td colSpan={3} className="border-r-2 border-black py-1 px-2 text-center font-black">
                     Total Dépenses
                   </td>
-                  <td colSpan={4} className="border-r-2 border-black py-1 px-2 text-center font-black">
+                  <td colSpan={4} className="py-1 px-2 text-center font-black">
                     {totalDepenses.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="p-1 print:hidden"></td>
                 </tr>
 
                 {/* MONTANT À VERSER ROW (RED: #ed1c24) */}
-                <tr className="bg-[#ed1c24] text-black font-black text-center border-b border-black">
+                <tr className="bg-[#ed1c24] text-black font-black text-center">
                   <td colSpan={3} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs sm:text-sm tracking-wide">
                     Montant à verser
                   </td>
-                  <td colSpan={4} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs sm:text-sm">
+                  <td colSpan={4} className="py-1.5 px-2 text-center font-black text-xs sm:text-sm">
                     {montantAVerser.toLocaleString('fr-FR')} CFA
                   </td>
-                  <td className="p-1 print:hidden"></td>
                 </tr>
 
                 {/* VERSEMENT EFFECTUÉ ROW (GREEN IF RECORDED) */}
                 {currentVersement && (
                   <>
-                    <tr className="bg-emerald-100 text-emerald-950 font-bold text-center border-b border-black">
+                    <tr className="bg-emerald-100 text-emerald-950 font-bold text-center border-t-2 border-black">
                       <td colSpan={3} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs">
                         Versement effectué le {currentVersement.date} ({currentVersement.paymentMethod})
                         {currentVersement.reference ? ` - Réf: ${currentVersement.reference}` : ''}
                       </td>
-                      <td colSpan={4} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs text-emerald-800">
+                      <td colSpan={4} className="py-1.5 px-2 text-center font-black text-xs text-emerald-800">
                         - {currentVersement.amount.toLocaleString('fr-FR')} CFA
                       </td>
-                      <td className="p-1 print:hidden"></td>
                     </tr>
-                    <tr className={`text-black font-black text-center ${soldeRestant === 0 ? 'bg-slate-100' : 'bg-amber-100'}`}>
+                    <tr className={`text-black font-black text-center border-t border-black ${soldeRestant === 0 ? 'bg-slate-100' : 'bg-amber-100'}`}>
                       <td colSpan={3} className="border-r-2 border-black py-1.5 px-2 text-center font-black text-xs">
                         Solde restant dû au bailleur
                       </td>
-                      <td colSpan={4} className={`border-r-2 border-black py-1.5 px-2 text-center font-black text-xs ${soldeRestant === 0 ? 'text-emerald-700' : 'text-amber-800'}`}>
+                      <td colSpan={4} className={`py-1.5 px-2 text-center font-black text-xs ${soldeRestant === 0 ? 'text-emerald-700' : 'text-amber-800'}`}>
                         {soldeRestant === 0 ? '0 CFA (COMPTE SOLDÉ ✓)' : `${soldeRestant.toLocaleString('fr-FR')} CFA`}
                       </td>
-                      <td className="p-1 print:hidden"></td>
                     </tr>
                   </>
                 )}
@@ -1395,14 +1404,221 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </div>
       </div>
 
-      {/* MODAL 1: MODIFIER ENCAISSEMENT */}
+      {/* MODAL 1: SÉLECTIONNER UN ENCAISSEMENT À MODIFIER OU SUPPRIMER */}
+      {isManageEncModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 no-print animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div className="p-4 bg-blue-600 text-white flex items-center justify-between font-black text-sm">
+              <span className="flex items-center gap-2">
+                <Edit2 className="w-4 h-4" />
+                Modifier ou Supprimer un Encaissement ({selectedMonth} {selectedYear})
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsManageEncModalOpen(false)}
+                className="text-white/80 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3 text-xs max-h-[70vh] overflow-y-auto">
+              <p className="text-slate-600 font-medium">
+                Sélectionnez l&apos;encaissement à modifier ou à supprimer :
+              </p>
+
+              {currentEncaissements.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
+                  Aucun encaissement enregistré pour ce mois.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {currentEncaissements.map((r, idx) => (
+                    <div
+                      key={r.id || idx}
+                      className="p-3 bg-slate-50 hover:bg-blue-50/50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-900 font-bold rounded text-[10px]">
+                            {r.date}
+                          </span>
+                          {r.pieceNumber && (
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              N° {r.pieceNumber}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-bold text-slate-900 text-xs">{r.designation}</p>
+                        <div className="flex flex-wrap gap-2 text-[10px] text-slate-600">
+                          <span>HT : <strong>{r.montantHT.toLocaleString('fr-FR')} CFA</strong></span>
+                          {r.teomAmount > 0 && <span>• TOM : {r.teomAmount.toLocaleString('fr-FR')} CFA</span>}
+                          {r.tvaAmount > 0 && <span>• TVA : {r.tvaAmount.toLocaleString('fr-FR')} CFA</span>}
+                          {r.tvlAmount > 0 && <span>• TVL : {r.tvlAmount.toLocaleString('fr-FR')} CFA</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManageEncModalOpen(false);
+                            handleStartEditEnc(r);
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Modifier</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEnc(r.id)}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Supprimer</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageEncModalOpen(false);
+                  setShowAddEncForm(true);
+                }}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Ajouter un nouvel encaissement</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsManageEncModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: SÉLECTIONNER UNE DÉPENSE À MODIFIER OU SUPPRIMER */}
+      {isManageDepModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 no-print animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div className="p-4 bg-rose-600 text-white flex items-center justify-between font-black text-sm">
+              <span className="flex items-center gap-2">
+                <Edit2 className="w-4 h-4" />
+                Modifier ou Supprimer une Dépense ({selectedMonth} {selectedYear})
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsManageDepModalOpen(false)}
+                className="text-white/80 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3 text-xs max-h-[70vh] overflow-y-auto">
+              <p className="text-slate-600 font-medium">
+                Sélectionnez la dépense à modifier ou à supprimer :
+              </p>
+
+              {currentDepenses.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
+                  Aucune dépense enregistrée pour ce mois.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {currentDepenses.map((d, idx) => (
+                    <div
+                      key={d.id || idx}
+                      className="p-3 bg-slate-50 hover:bg-rose-50/50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-900 font-bold rounded text-[10px]">
+                            {d.date}
+                          </span>
+                          {d.pieceNumber && (
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              N° {d.pieceNumber}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-bold text-slate-900 text-xs">{d.designation}</p>
+                        <p className="text-xs font-black text-rose-800">
+                          {d.montant.toLocaleString('fr-FR')} CFA
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManageDepModalOpen(false);
+                            handleStartEditDep(d);
+                          }}
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Modifier</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDep(d.id)}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Supprimer</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageDepModalOpen(false);
+                  setShowAddDepForm(true);
+                }}
+                className="text-xs font-bold text-rose-700 hover:text-rose-800 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Ajouter une nouvelle dépense</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsManageDepModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: MODIFIER OU SUPPRIMER DIRECTEMENT L'ENCAISSEMENT */}
       {editingEncRow && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 no-print animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
             <div className="p-4 bg-blue-600 text-white flex items-center justify-between font-black text-sm">
               <span className="flex items-center gap-2">
                 <Edit2 className="w-4 h-4" />
-                Modifier la ligne d&apos;encaissement
+                Modifier ou Supprimer l&apos;Encaissement
               </span>
               <button
                 type="button"
@@ -1512,7 +1728,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer</span>
+                  <span>Supprimer cet encaissement</span>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -1536,14 +1752,14 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </div>
       )}
 
-      {/* MODAL 2: MODIFIER DÉPENSE */}
+      {/* MODAL 4: MODIFIER OU SUPPRIMER DIRECTEMENT LA DÉPENSE */}
       {editingDepRow && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 no-print animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
             <div className="p-4 bg-rose-600 text-white flex items-center justify-between font-black text-sm">
               <span className="flex items-center gap-2">
                 <Edit2 className="w-4 h-4" />
-                Modifier la ligne de dépense
+                Modifier ou Supprimer la Dépense
               </span>
               <button
                 type="button"
@@ -1614,7 +1830,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
                   className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer</span>
+                  <span>Supprimer cette dépense</span>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -1638,7 +1854,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </div>
       )}
 
-      {/* MODAL 3: OPTION VERSEMENT AU BAILLEUR */}
+      {/* MODAL 5: OPTION VERSEMENT AU BAILLEUR */}
       {isVersementModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 no-print animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
@@ -1818,7 +2034,7 @@ Agence : ${organization?.name || 'SunuGestion Sénégal'}`;
         </div>
       )}
 
-      {/* MODAL 4: REÇU OFFICIEL DE DÉCHARGE DE VERSEMENT */}
+      {/* MODAL 6: REÇU OFFICIEL DE DÉCHARGE DE VERSEMENT */}
       {isReceiptModalOpen && currentVersement && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-300">
