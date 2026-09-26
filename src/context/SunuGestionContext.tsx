@@ -27,6 +27,7 @@ import { SupabaseDbService } from '@/lib/supabase/db';
 
 export interface SunuGestionContextType {
   currentUser: User;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User>>;
   organization: Organization;
   currentRole: UserRole;
   switchRole: (role: UserRole) => void;
@@ -1532,6 +1533,16 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
   // Hydratation instantanée LocalStorage pour éviter tout flash d'anciennes données
   useEffect(() => {
     try {
+      const sessionRaw = localStorage.getItem('sunu_session_user');
+      if (sessionRaw) {
+        try {
+          const parsedUser = JSON.parse(sessionRaw);
+          if (parsedUser && parsedUser.name) {
+            setCurrentUser(parsedUser);
+            if (parsedUser.role) setCurrentRole(parsedUser.role);
+          }
+        } catch (e) {}
+      }
       const cachedProperties = localStorage.getItem('sunu_properties');
       if (cachedProperties !== null) {
         const parsed = JSON.parse(cachedProperties);
@@ -3028,6 +3039,7 @@ export function SunuGestionProvider({ children }: { children: React.ReactNode })
     <SunuGestionContext.Provider
       value={{
         currentUser,
+        setCurrentUser,
         organization,
         currentRole,
         switchRole,

@@ -10,12 +10,26 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  password?: string;
   phone: string;
   role: UserRole;
   agencyId: string;
   avatar?: string;
   status: 'ACTIVE' | 'SUSPENDED';
   createdAt: string;
+}
+
+export interface AgencyUser {
+  id: string;
+  name: string;
+  email: string;
+  username: string; // Identifiant de connexion unique
+  password: string; // Mot de passe attribué
+  role: UserRole;
+  phone: string;
+  status: 'ACTIF' | 'SUSPENDU';
+  createdAt?: string;
 }
 
 export interface Organization {

@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSunuGestion } from '@/context/SunuGestionContext';
+import { clearCurrentSession } from '@/lib/authService';
 import {
   LayoutDashboard,
   Building2,
@@ -32,7 +33,17 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { currentRole, organization, isMobileSidebarOpen, setIsMobileSidebarOpen } = useSunuGestion();
+  const router = useRouter();
+  const { currentUser, currentRole, organization, isMobileSidebarOpen, setIsMobileSidebarOpen } = useSunuGestion();
+
+  const handleLogout = () => {
+    clearCurrentSession();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sunu_logged_out', 'true');
+    }
+    setIsMobileSidebarOpen(false);
+    router.push('/connexion');
+  };
 
   // Define navigation links based on RBAC role
   let navItems = [
@@ -184,23 +195,30 @@ export default function Sidebar() {
         {/* Bottom Footer User Info */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-blue-500/30">
-                MS
+            <div className="flex items-center gap-2.5 truncate">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-blue-500/30 shrink-0">
+                {currentUser?.name
+                  ? currentUser.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .substring(0, 2)
+                      .toUpperCase()
+                  : 'SG'}
               </div>
               <div className="truncate">
-                <p className="text-xs font-semibold text-slate-200 truncate">Mamadou Sy</p>
-                <p className="text-[10px] text-slate-400 truncate">Sunu Gestion Dakar</p>
+                <p className="text-xs font-semibold text-slate-200 truncate">{currentUser?.name || 'Mamadou Sy'}</p>
+                <p className="text-[10px] text-slate-400 truncate">{currentRole}</p>
               </div>
             </div>
-            <Link
-              href="/"
-              onClick={() => setIsMobileSidebarOpen(false)}
-              title="Déconnexion"
-              className="text-slate-400 hover:text-rose-400 transition-colors p-1.5 rounded-md hover:bg-slate-800 cursor-pointer"
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Se déconnecter"
+              className="text-slate-400 hover:text-rose-400 transition-colors p-1.5 rounded-md hover:bg-slate-800 cursor-pointer shrink-0"
             >
               <LogOut className="w-4 h-4" />
-            </Link>
+            </button>
           </div>
         </div>
       </aside>
