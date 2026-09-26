@@ -218,60 +218,52 @@ export default function PropertyDetailPage() {
     (e) => e.propertyId === property?.id || e.propertyName === property?.name
   );
 
+  // Strictly filter tenants that belong to THIS property
   const propertyTenants = property
-    ? tenants.filter(
-        (t) =>
-          t.propertyId === property.id ||
-          (t.propertyName &&
-            property.name &&
-            t.propertyName.trim().toLowerCase() === property.name.trim().toLowerCase()) ||
-          propertyUnits.some(
-            (u) =>
-              u.id === t.unitId ||
-              (u.unitNumber && t.unitNumber && u.unitNumber.trim().toLowerCase() === t.unitNumber.trim().toLowerCase())
-          )
-      )
+    ? tenants.filter((t) => {
+        if (t.propertyId && t.propertyId === property.id) return true;
+        if (
+          t.propertyName &&
+          property.name &&
+          t.propertyName.trim().toLowerCase() === property.name.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        if (t.unitId && propertyUnits.some((u) => u.id === t.unitId)) {
+          return true;
+        }
+        return false;
+      })
     : [];
 
-  // Occupied list from units table
-  const occupiedUnitsFromTable = propertyUnits
-    .filter(
+  // Pair each real tenant of this property with their unit in this property
+  const assignedUnitIds = new Set<string>();
+  const allOccupiedUnits = propertyTenants.map((t) => {
+    const matchedUnit = propertyUnits.find(
       (u) =>
-        u.status === 'OCCUPE' ||
-        u.status === 'EN_RETARD' ||
-        Boolean(u.tenantId) ||
-        Boolean(u.tenantName) ||
-        propertyTenants.some(
-          (t) =>
-            t.unitId === u.id ||
-            (u.unitNumber && t.unitNumber && u.unitNumber.trim().toLowerCase() === t.unitNumber.trim().toLowerCase())
-        )
-    )
-    .map((u) => {
-      const tenant = propertyTenants.find(
-        (t) =>
-          t.id === u.tenantId ||
-          t.unitId === u.id ||
-          (t.unitNumber && u.unitNumber && t.unitNumber.trim().toLowerCase() === u.unitNumber.trim().toLowerCase())
-      );
-      return {
-        unit: u,
-        tenant: tenant || null,
-        tenantName: tenant ? `${tenant.firstName} ${tenant.lastName}` : (u.tenantName || 'Locataire actuel'),
-        rentFCFA: u.rentFCFA || (tenant ? tenant.rentFCFA : 0),
-      };
-    });
+        !assignedUnitIds.has(u.id) &&
+        (u.id === t.unitId ||
+          u.tenantId === t.id ||
+          (u.unitNumber && t.unitNumber && u.unitNumber.trim().toLowerCase() === t.unitNumber.trim().toLowerCase()))
+    );
 
-  // Extra tenants belonging to this property
-  const extraTenantsInProperty = propertyTenants
-    .filter((t) => !occupiedUnitsFromTable.some((item) => item.tenant?.id === t.id))
-    .map((t) => ({
+    if (matchedUnit) {
+      assignedUnitIds.add(matchedUnit.id);
+      return {
+        unit: matchedUnit,
+        tenant: t,
+        tenantName: `${t.firstName} ${t.lastName}`,
+        rentFCFA: t.rentFCFA || matchedUnit.rentFCFA || 0,
+      };
+    }
+
+    return {
       unit: {
         id: t.unitId || `synth-${t.id}`,
         propertyId: property?.id || '',
         propertyName: property?.name || '',
         unitNumber: t.unitNumber || 'Logement',
-        type: 'APPARTEMENT' as any,
+        type: (property?.type === 'VILLA' ? 'VILLA' : 'APPARTEMENT') as any,
         floor: 'RDC / Étage',
         surfaceM2: 0,
         roomsCount: 0,
@@ -286,12 +278,11 @@ export default function PropertyDetailPage() {
       tenant: t,
       tenantName: `${t.firstName} ${t.lastName}`,
       rentFCFA: t.rentFCFA,
-    }));
+    };
+  });
 
-  const allOccupiedUnits = [...occupiedUnitsFromTable, ...extraTenantsInProperty];
-  const allVacantUnits = propertyUnits.filter(
-    (u) => !occupiedUnitsFromTable.some((item) => item.unit.id === u.id)
-  );
+  // Vacant units: any unit belonging to this property that has no tenant assigned
+  const allVacantUnits = propertyUnits.filter((u) => !assignedUnitIds.has(u.id));
 
   const totalUnitsCount = Math.max(property?.totalUnits || 0, allOccupiedUnits.length + allVacantUnits.length);
   const occupiedCount = allOccupiedUnits.length;

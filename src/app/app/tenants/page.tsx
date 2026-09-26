@@ -214,8 +214,8 @@ export default function TenantsPage() {
       const targetProperty = properties.find((p) => p.id === selectedPropertyId) || properties[0];
       const targetUnit = units.find((u) => u.id === selectedUnitId);
 
-      const finalPropertyId = targetProperty?.id || 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e';
-      const finalPropertyName = targetProperty?.name || 'Patrimoine Agence Dakar';
+      const finalPropertyId = targetProperty ? targetProperty.id : '';
+      const finalPropertyName = targetProperty ? targetProperty.name : 'Patrimoine Agence';
       const finalUnitNumber = customUnitName.trim() || (targetProperty?.type === 'VILLA' ? 'Villa' : 'Appartement 1');
       const finalRent = Number(customRent) || targetUnit?.rentFCFA || 350000;
       const finalUnitId = targetUnit ? targetUnit.id : `unit-${Date.now()}`;

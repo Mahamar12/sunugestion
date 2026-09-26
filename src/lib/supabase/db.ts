@@ -619,6 +619,17 @@ export const SupabaseDbService = {
         try {
           // 1. Determine valid property_id
           let targetPropertyId = tenant.propertyId;
+          if (!isUUID(targetPropertyId) && tenant.propertyName) {
+            const { data: propByName } = await supabase
+              .from('properties')
+              .select('id')
+              .ilike('name', tenant.propertyName.trim())
+              .limit(1)
+              .maybeSingle();
+            if (propByName?.id) {
+              targetPropertyId = propByName.id;
+            }
+          }
           if (!isUUID(targetPropertyId)) {
             const { data: propRow } = await supabase.from('properties').select('id').limit(1).single();
             targetPropertyId = propRow?.id || 'd95c65a7-d3c6-47d2-83b1-2355f15acc7e';
@@ -709,10 +720,21 @@ export const SupabaseDbService = {
         await supabase.from('tenants').update(payload).eq('id', tenantId);
       }
 
-      if (updates.rentFCFA || (updates.propertyId && isUUID(updates.propertyId))) {
+      let targetPropertyId = updates.propertyId;
+      if (targetPropertyId && !isUUID(targetPropertyId) && updates.propertyName) {
+        const { data: propByName } = await supabase
+          .from('properties')
+          .select('id')
+          .ilike('name', updates.propertyName.trim())
+          .limit(1)
+          .maybeSingle();
+        if (propByName?.id) targetPropertyId = propByName.id;
+      }
+
+      if (updates.rentFCFA || (targetPropertyId && isUUID(targetPropertyId))) {
         const leasePayload: any = {};
         if (updates.rentFCFA) leasePayload.rent_amount_fcfa = updates.rentFCFA;
-        if (updates.propertyId && isUUID(updates.propertyId)) leasePayload.property_id = updates.propertyId;
+        if (targetPropertyId && isUUID(targetPropertyId)) leasePayload.property_id = targetPropertyId;
         if (isUUID(tenantId)) {
           await supabase.from('leases').update(leasePayload).eq('tenant_id', tenantId);
         }
